@@ -5,7 +5,7 @@
   "extension_author": "TrustedSec",
   "original_author": "TrustedSec",
   "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
-  "help": "Unlock and enable a local / remote user account",
+  "help": "Create a scheduled task given a XML task definition",
   "depends_on": "coff-loader",
   "entrypoint": "go",
   "files": [
