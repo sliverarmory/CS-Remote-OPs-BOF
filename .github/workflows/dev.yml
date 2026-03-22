@@ -22,6 +22,7 @@ jobs:
 
       - name: Build all BOFs
         run: |
+          chmod +x ./make_bof.sh
           mkdir -p packages Remote Injection
           for makefile in src/Remote/*/Makefile src/Injection/*/Makefile; do
             bof_dir=$(dirname "$makefile")
