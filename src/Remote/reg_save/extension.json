@@ -1,43 +1,50 @@
 {
-"name": "reg_save",
-"version": "0.0.0",
-"command_name": "remote-reg-save",
-"extension_author": "TrustedSec",
-"original_author": "TrustedSec",
-"repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
-"help": "backup a registry have to a file on disk (requires Enabled SEBackup Priv)",
-"depends_on": "coff-loader",
-"entrypoint": "go",
-"files": [
-{
-"os": "windows",
-"arch": "amd64",
-"path": "reg_save.x64.o"
-},
-{
-"os": "windows",
-"arch": "386",
-"path": "reg_save.x86.o"
-}
-],
-"arguments": [
-    {
-    "name": "path",
-    "desc": "parent key to initiate save from",
-    "type": "string",
-    "optional": false
-    },
-    {
-    "name": "output_path",
-    "desc": "path on target disk to write backup to",
-    "type": "string",
-    "optional": false
-    },
-    {
-    "name": "hive",
-    "desc": "0=HKCR|1=HKCU|2=HKLM|3=HKU",
-    "type": "int",
-    "optional": false
-    }
-]
+    "name": "Registry Save (Remote)",
+    "package_name": "remote-reg-save",
+    "version": "0.0.0",
+    "extension_author": "TrustedSec",
+    "original_author": "TrustedSec",
+    "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
+    "commands": [
+        {
+            "command_name": "remote-reg-save",
+            "help": "Save a registry hive to a file on disk",
+            "long_help": "Backs up a registry key to a file on the target using RegSaveKeyExA. Requires SeBackupPrivilege to be enabled.",
+            "depends_on": "coff-loader",
+            "entrypoint": "go",
+            "files": [
+                {
+                    "os": "windows",
+                    "arch": "amd64",
+                    "path": "reg_save.x64.o"
+                },
+                {
+                    "os": "windows",
+                    "arch": "386",
+                    "path": "reg_save.x86.o"
+                }
+            ],
+            "arguments": [
+                {
+                    "name": "path",
+                    "desc": "Registry key path to save from",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "output-path",
+                    "desc": "File path on target to write the backup to",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "hive",
+                    "desc": "Registry hive: 0=HKCR, 1=HKCU, 2=HKLM, 3=HKU",
+                    "type": "integer",
+                    "optional": false,
+                    "choices": ["0", "1", "2", "3"]
+                }
+            ]
+        }
+    ]
 }

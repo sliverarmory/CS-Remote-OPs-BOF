@@ -1,73 +1,84 @@
 {
-"name": "sc_create",
-"version": "0.0.0",
-"command_name": "remote-sc-create",
-"extension_author": "TrustedSec",
-"original_author": "TrustedSec",
-"repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
-"help": "Create a new service on a windows system",
-"depends_on": "coff-loader",
-"entrypoint": "go",
-"files": [
-{
-"os": "windows",
-"arch": "amd64",
-"path": "sc_create.x64.o"
-},
-{
-"os": "windows",
-"arch": "386",
-"path": "sc_create.x86.o"
-}
-],
-"arguments": [
-    {
-        "name": "hostname",
-        "desc": "hostname to create service on use \"\" for local system",
-        "type": "string",
-        "optional": false
-        },
+    "name": "Service Create (Remote)",
+    "package_name": "remote-sc-create",
+    "version": "0.0.0",
+    "extension_author": "TrustedSec",
+    "original_author": "TrustedSec",
+    "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
+    "commands": [
         {
-        "name": "service_name",
-        "desc": "name of service to create",
-        "type": "string",
-        "optional": false
-        },
-        {
-        "name": "binpath",
-        "desc": "New binary path for service",
-        "type": "string",
-        "optional": false
-        },
-        {
-        "name": "display_name",
-        "desc": "Service displayname to use",
-        "type": "string",
-        "optional": false
-        },
-        {
-        "name": "description",
-        "desc": "Service description to set",
-        "type": "string",
-        "optional": false
-        },
-        {
-        "name": "error_mode",
-        "desc": "new error mode for service binary\n\t\t0=ignore|1=normal|2=severe|3=critical",
-        "type": "short",
-        "optional": false
-        },
-        {
-        "name": "start_mode",
-        "desc": "start mode for service\n\t\t2=auto|3=demand|4=disable",
-        "type": "short",
-        "optional": false
-        },
-        {
-        "name": "type",
-        "desc": "The type of service to create. The valid options are:\n\t\t1 - SERVICE_FILE_SYSTEM_DRIVER (File system driver service)\n\t\t2 - SERVICE_KERNEL_DRIVER (Driver service)\n\t\t16 - SERVICE_WIN32_OWN_PROCESS (Service that runs in its own process)\n\t\t32 - SERVICE_WIN32_SHARE_PROCESS (Service that shares a process with one or more other services)",
-        "type": "short",
-        "optional": false
+            "command_name": "remote-sc-create",
+            "help": "Create a new service on a local or remote machine",
+            "long_help": "Creates a new Windows service using CreateServiceA and optionally sets a description via ChangeServiceConfig2A.",
+            "depends_on": "coff-loader",
+            "entrypoint": "go",
+            "files": [
+                {
+                    "os": "windows",
+                    "arch": "amd64",
+                    "path": "sc_create.x64.o"
+                },
+                {
+                    "os": "windows",
+                    "arch": "386",
+                    "path": "sc_create.x86.o"
+                }
+            ],
+            "arguments": [
+                {
+                    "name": "hostname",
+                    "desc": "Target machine. Empty string for local machine",
+                    "type": "string",
+                    "optional": true,
+                    "default": ""
+                },
+                {
+                    "name": "service-name",
+                    "desc": "Internal name of the service to create",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "binpath",
+                    "desc": "Binary path for the service executable",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "display-name",
+                    "desc": "Display name for the service",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "description",
+                    "desc": "Service description text",
+                    "type": "string",
+                    "optional": true,
+                    "default": ""
+                },
+                {
+                    "name": "error-mode",
+                    "desc": "Error mode: 0=ignore, 1=normal, 2=severe, 3=critical",
+                    "type": "short",
+                    "optional": false,
+                    "choices": ["0", "1", "2", "3"]
+                },
+                {
+                    "name": "start-mode",
+                    "desc": "Start mode: 2=auto, 3=demand, 4=disabled",
+                    "type": "short",
+                    "optional": false,
+                    "choices": ["2", "3", "4"]
+                },
+                {
+                    "name": "service-type",
+                    "desc": "Service type: 1=FILE_SYSTEM_DRIVER, 2=KERNEL_DRIVER, 16=WIN32_OWN_PROCESS, 32=WIN32_SHARE_PROCESS",
+                    "type": "short",
+                    "optional": false,
+                    "choices": ["1", "2", "16", "32"]
+                }
+            ]
         }
-]
+    ]
 }
