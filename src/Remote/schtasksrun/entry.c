@@ -42,7 +42,7 @@ DWORD runTask(const wchar_t * server, const wchar_t * taskname)
     
     // Initialize COM
     hr = OLE32$CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    if(FAILED(hr))
+    if(FAILED(hr) && hr != RPC_E_CHANGED_MODE)
     {
         internal_printf("Could not initialize com (%lX)\n", hr);
         goto runTask_end;

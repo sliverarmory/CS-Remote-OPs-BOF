@@ -193,6 +193,7 @@ BOOL ParseArguments(datap *parser, Arguments *arguments)
     char *userName;
     char *scheduleType;
     char *time = NULL;
+    char *dayStr = NULL;
     char *day;
     int computerNameSize;
     arguments->dayBitmap = 0;
@@ -268,8 +269,8 @@ BOOL ParseArguments(datap *parser, Arguments *arguments)
                         BeaconPrintf(CALLBACK_ERROR, " Please provide days (e.g., monday,friday) for weekly execution.");
                         return false;
                     }
-                    time = BeaconDataExtract(parser, NULL);
-                    day = _strlwr(time);
+                    dayStr = BeaconDataExtract(parser, NULL);
+                    day = _strlwr(dayStr);
                     for (int j = 0; j < 7; j++)
                     {
                         if (my_strstr(day, (char *)DAYS[j]))
