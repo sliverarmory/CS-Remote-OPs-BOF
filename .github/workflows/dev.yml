@@ -1,0 +1,40 @@
+name: Dev Build
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bof-build:
+    name: Build and validate BOFs
+    runs-on: ubuntu-latest
+    container:
+      image: freefirex2/ts_bof_builder@sha256:e203ba628c97abb51ef65914b216fa1e088401710107027c353d15f09e0cfb62
+    timeout-minutes: 10
+    steps:
+      - name: OS Packages
+        run: dnf install -y jq
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build all BOFs
+        run: |
+          mkdir -p packages Remote Injection
+          for makefile in src/Remote/*/Makefile src/Injection/*/Makefile; do
+            bof_dir=$(dirname "$makefile")
+            bof_name=$(basename "$bof_dir")
+            bof_type=$(basename "$(dirname "$bof_dir")")
+            echo "::group::$bof_type/$bof_name"
+            ./make_bof.sh "$bof_name" "$bof_type"
+            echo "::endgroup::"
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: bof-packages
+          path: packages/
+          retention-days: 14
