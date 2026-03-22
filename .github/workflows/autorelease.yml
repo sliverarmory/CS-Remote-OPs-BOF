@@ -74,11 +74,6 @@ jobs:
           chmod +x ./make_bof.sh
           ./make_bof.sh enableuser Remote
 
-      - name: lastpass
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh lastpass Remote
-
       - name: office_tokens
         run: |
           chmod +x ./make_bof.sh
@@ -179,11 +174,6 @@ jobs:
           chmod +x ./make_bof.sh
           ./make_bof.sh get_priv Remote
 
-      - name: ghost_task
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ghost_task Remote
-
       - name: sc_failure
         run: |
           chmod +x ./make_bof.sh
@@ -213,6 +203,26 @@ jobs:
         run: |
           chmod +x ./make_bof.sh
           ./make_bof.sh slackKey Remote
+
+      - name: ask_mfa
+        run: |
+          chmod +x ./make_bof.sh
+          ./make_bof.sh ask_mfa Remote
+
+      - name: disableuser
+        run: |
+          chmod +x ./make_bof.sh
+          ./make_bof.sh disableuser Remote
+
+      - name: get_azure_token
+        run: |
+          chmod +x ./make_bof.sh
+          ./make_bof.sh get_azure_token Remote
+
+      - name: shutdown
+        run: |
+          chmod +x ./make_bof.sh
+          ./make_bof.sh shutdown Remote
 
       - name: clipboard
         run: |
