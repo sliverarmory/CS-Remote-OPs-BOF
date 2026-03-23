@@ -4,6 +4,7 @@
 #include "beacon.h"
 #include "bofdefs.h"
 #include "base.c"
+#define PATH_BUF_SIZE 1024
 
 
 DWORD AddUserToGroup(LPCWSTR lpswzServer, LPCWSTR lpswzUserName, LPCWSTR lpswzGroupName, LPCWSTR lpswzDomainName)
@@ -15,22 +16,33 @@ DWORD AddUserToGroup(LPCWSTR lpswzServer, LPCWSTR lpswzUserName, LPCWSTR lpswzGr
 	{
 		BeaconPrintf(CALLBACK_ERROR, "Unable to add user to group %lX\n", dwErrorCode);
 		BeaconPrintf(CALLBACK_OUTPUT, "Trying to add to local group instead");
-		mi[0].lgrmi3_domainandname = intAlloc(1024);
+		mi[0].lgrmi3_domainandname = intAlloc(PATH_BUF_SIZE * (sizeof(wchar_t)));
+		if(!mi[0].lgrmi3_domainandname)
+		{
+			dwErrorCode = ERROR_OUTOFMEMORY;
+			internal_printf("intAlloc failed (%lu)\n", dwErrorCode);
+			goto end;
+		}
 		if (lpswzDomainName != NULL)
 		{
-			MSVCRT$wcscat(mi[0].lgrmi3_domainandname, lpswzDomainName);
-			MSVCRT$wcscat(mi[0].lgrmi3_domainandname, L"\\");
+			MSVCRT$_snwprintf(mi[0].lgrmi3_domainandname, PATH_BUF_SIZE - 1, L"%s\\%s", lpswzDomainName, lpswzUserName);
 		}
-		MSVCRT$wcscat(mi[0].lgrmi3_domainandname, lpswzUserName);
+		else
+		{
+			MSVCRT$_snwprintf(mi[0].lgrmi3_domainandname, PATH_BUF_SIZE - 1, L"%s", lpswzUserName);
+		}
 
-		BeaconPrintf(CALLBACK_OUTPUT, "Trying to add %ls to local group instead", mi[0].lgrmi3_domainandname);	
+		BeaconPrintf(CALLBACK_OUTPUT, "Trying to add %ls to local group instead", mi[0].lgrmi3_domainandname);
 		dwErrorCode = NETAPI32$NetLocalGroupAddMembers(lpswzServer, lpswzGroupName, 3, (LPBYTE)mi, 1);
 		if(NERR_Success != dwErrorCode)
 		{
 			BeaconPrintf(CALLBACK_ERROR, "Unable to add user to local group %lX\n", dwErrorCode);
 		}
-		
-	} 
+
+	}
+
+end:
+	if(mi[0].lgrmi3_domainandname){intFree(mi[0].lgrmi3_domainandname);};
 
 	return dwErrorCode;
 }
@@ -47,12 +59,23 @@ VOID go(
 	LPCWSTR lpswzHostName = (LPCWSTR)BeaconDataExtract(&parser, NULL); // $4
 	LPCWSTR lpswzUserName = (LPCWSTR)BeaconDataExtract(&parser, NULL); // $2
 	LPCWSTR lpswzGroupName = (LPCWSTR)BeaconDataExtract(&parser, NULL);// $3
-	if(lpswzHostName[0] == L'\0'){lpswzHostName = NULL;}
-	if(lpswzDomainName[0] == L'\0'){lpswzDomainName = NULL;}
+	if(!lpswzHostName || lpswzHostName[0] == L'\0'){lpswzHostName = NULL;}
+	if(!lpswzDomainName || lpswzDomainName[0] == L'\0'){lpswzDomainName = NULL;}
 
 	if(!bofstart())
 	{
 		return;
+	}
+
+	if(!lpswzUserName || lpswzUserName[0] == L'\0')
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Username is required\n");
+		goto go_end;
+	}
+	if(!lpswzGroupName || lpswzGroupName[0] == L'\0')
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Group name is required\n");
+		goto go_end;
 	}
 
 	internal_printf("Adding %S to %S\n", lpswzUserName, lpswzGroupName);
@@ -85,7 +108,7 @@ int main(int argc, char ** argv)
 	
 	internal_printf("Adding %S to %S\n", lpswzUserName, lpswzGroupName);
 
-	dwErrorCode = AddUserToGroup(lpswzHostName, lpswzUserName, lpswzGroupName);
+	dwErrorCode = AddUserToGroup(lpswzHostName, lpswzUserName, lpswzGroupName, NULL);
 	if ( ERROR_SUCCESS != dwErrorCode )
 	{
 		BeaconPrintf(CALLBACK_ERROR, "Adding user to group failed: %lX\n", dwErrorCode);

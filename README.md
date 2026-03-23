@@ -13,42 +13,49 @@ We have decided to include the injection BOFs that we use when doing EDR detecti
 You are welcome to use these, but issues opened related to these will be closed without review.
 
 ## Available Remote Operations commands
-|Command|Notes|
-|-------|-----|
-|adcs_request| Request an enrollment certificate|
-|adcs_request_on_behalf| Request an enrollment certificate on behalf of another user|
-|adduser| Add specified user to a machine|
-|addusertogroup| Add specified user to a group|
-|chromeKey| Decrypt the provided base64 encoded Chrome key|
-|enableuser| Enable and unlock the specified user account|
-|get_priv| Activate the specified token privledge, more for non-cobalt strike users|
-|global_unprotect| Locates and Decrypts GlobalProtect config files converted from: [GlobalUnProtect](https://github.com/rotarydrone/GlobalUnProtect/tree/409d64b097e0a928a5545051e40e1566e9c26bd0)|
-|lastpass | Search Chrome, brave memory for LastPass passwords and data|
-|make_token_cert| impersonates a user using the altname of a .pfx file |
-|office_tokens| Collect Office JWT Tokens from any Office process|
-|procdump| Dump the specified process to the specified output file|
-|ProcessDestroy| Close handle(s) in a process|
-|ProcessListHandles| List all open handles in a specified process|
-|reg_delete| Delete a registry key|
-|reg_save| Save a registry hive to disk|
-|reg_set| Set / create a registry key|
-|sc_config| Configure an existing service|
-|sc_create| Create a new service|
-|sc_delete| Delete an existing service|
-|sc_failure| Configures the actions upon failure of an existing service|
-|sc_description| Modify an existing services description|
-|sc_start| Start an existing service|
-|sc_stop| Stop an existing service|
-|schtaskscreate| Create a new scheduled task (via xml definition)|
-|schtasksdelete| Delete an existing scheduled task|
-|schtasksrun| Start a scheduled task|
-|schtasksstop| Stop a running scheduled task|
-|setuserpass| Set a user's password|
-|shspawnas| A misguided attempt at injecting code into a newly spawned process|
-|shutdown| Shutdown or reboot a local or remote computer, with or without a warning/message
-|slack_cookie| Collect the Slack authentication cookie from a Slack process|
-|unexpireuser| Set a user account to never expire|
-|ghost_task| Add/Delete a ghost task.
+
+|Command|Usage|Notes|
+|-------|-----|-----|
+|adcs_request| adcs_request [CA] [OPT:TEMPLATE] [OPT:SUBJECT] [OPT:ALTNAME] [OPT:INSTALL] [OPT:MACHINE] [OPT:ADD_APP_POLICY] [OPT:DNS] | Request an enrollment certificate|
+|adcs_request_on_behalf| adcs_request_on_behalf [TEMPLATE] [REQUESTER] [ENROLLMENT_AGENT.pfx] [Download_Name] | Request an enrollment certificate on behalf of another user|
+|adduser| adduser [USERNAME] [PASSWORD] [SERVER] | Add specified user to a machine|
+|addusertogroup| addusertogroup [USERNAME] [GROUPNAME] [SERVER] [DOMAIN] | Add specified user to a group|
+|ask_mfa | ask_mfa [NUMBER] | Displays a fake Microsoft Authenticator approval dialog with the specified number. |
+|chromeKey| chromeKey | Decrypt the provided base64 encoded Chrome key|
+|disableuser| disableuser [USERNAME] [DOMAIN] | Disable the specified user account|
+|enableuser| enableuser [USERNAME] [DOMAIN] | Enable and unlock the specified user account|
+|get_azure_token| get_azure_token [CLIENT ID] [SCOPE] [BROWSER] [OPT:HINT] [OPT:BROWSER PATH] | Attempts to complete an OAuth codeflow grant against azure using saved logins |
+|get_priv| get_priv [Privledge Name] | Activate the specified token privledge, more for non-cobalt strike users|
+|ghost_task| ghost_task [HOSTNAME/LOCALHOST] [OPERATION] [TASKANME] [PROGRAM] [ARGUMENT] [USERNAME] [SCHEDULETYPE] [TIME/SECOND] [DAY] | Add/Delete a ghost task. |
+|global_unprotect| global_unprotect | Locates and Decrypts GlobalProtect config files converted from: [GlobalUnProtect](https://github.com/rotarydrone/GlobalUnProtect/tree/409d64b097e0a928a5545051e40e1566e9c26bd0)|
+|lastpass | lastpass [NUMBER OF PIDs] [PID],[PID],[PID],[PID] ... | Search Chrome, brave memory for LastPass passwords and data|
+|make_token_cert| make_token_cert [.PFX LOCAL PATH] [OPT:PFX PASSWORD]| Impersonates a user using the altname of a .pfx file |
+|office_tokens| office_tokens [PID] | Collect Office JWT Tokens from any Office process|
+|procdump| procdump [PID] [FILEOUT] | Dump the specified process to the specified output file|
+|ProcessDestroy| ProcessDestroy [PID] [OPT:HANDLEID] | Close handle(s) in a process|
+|ProcessListHandles| ProcessListHandles [PID] | List all open handles in a specified process|
+|reg_delete| reg_delete [OPT:HOSTNAME] [HIVE] [REGPATH] [OPT:REGVALUE] | Delete a registry key|
+|reg_save| reg_save [HIVE] [REGPATH] [FILEOUT] | Save a registry hive to disk|
+|reg_set| reg_set [OPT:HOSTNAME] [HIVE] [KEY] [VALUE] [TYPE] [DATA] | Set / create a registry key|
+|sc_config| sc_config [SVCNAME] [BINPATH] [ERRORMODE] [STARTMODE] [OPT:HOSTNAME] | Configure an existing service|
+|sc_create| sc_create [SVCNAME] [DISPLAYNAME] [BINPATH] [DESCRIPTION] [ERRORMODE] [STARTMODE] [OPT:TYPE] [OPT:HOSTNAME] | Create a new service|
+|sc_delete| sc_delete [SVCNAME] [OPT:HOSTNAME] | Delete an existing service|
+|sc_description| sc_description [SVCNAME] [DESCRIPTION] [OPT:HOSTNAME] | Modify an existing services description|
+|sc_failure| sc_failure [SVCNAME] [RESETPERIOD] [REBOOTMESSAGE] [COMMAND] [NUMACTIONS] [ACTIONS] [OPT:HOSTNAME] | Configures the actions upon failure of an existing service|
+|sc_start| sc_start [SVCNAME] [OPT:HOSTNAME] | Start an existing service|
+|sc_stop| sc_stop [SVCNAME] [OPT:HOSTNAME] | Stop an existing service|
+|schtaskscreate| schtaskscreate [OPT:HOSTNAME] [USERNAME] [PASSWORD] [TASKPATH] [USERMODE] [FORCEMODE] | Create a new scheduled task (via xml definition)|
+|schtasksdelete| schtasksdelete [OPT:HOSTNAME] [TASKNAME] [TYPE] | Delete an existing scheduled task|
+|schtasksrun| schtasksrun [OPT:HOSTNAME] [TASKNAME] | Start a scheduled task|
+|schtasksstop| schtasksstop [OPT:HOSTNAME] [TASKNAME] | Stop a running scheduled task|
+|setuserpass| setuserpass [USERNAME] [PASSWORD] [DOMAIN] | Set a user's password|
+|shspawnas| shspawnas [DOMAIN] [USERNAME] [PASSWORD] [OPT:SHELLCODEFILE] | A misguided attempt at injecting code into a newly spawned process|
+|shutdown| shutdown [HOSTNAME] \"[MESSAGE]\" [TIME] [CLOSEAPPS] [REBOOT] | Shutdown or reboot a local or remote computer, with or without a warning/message
+|slackKey | slackKey | Attempts to harvest slack keys from "%APPDATA%\Slack\Local State" |
+|slack_cookie| slack_cookie [PID] | Collect the Slack authentication cookie from a Slack process|
+|suspendresume | suspendresume [0\|1] [PID] | Suspend a process with 1, resume a process with 0|
+|unexpireuser| unexpireuser [USERNAME] [DOMAIN] | Set a user account to never expire|
+
 
 ## Contributing
 

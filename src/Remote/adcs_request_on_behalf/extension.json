@@ -1,50 +1,55 @@
 {
-    "name": "adcs_request_on_behalf",
+    "name": "ADCS Request On Behalf (Remote)",
+    "package_name": "remote-adcs_request_on_behalf",
     "version": "0.0.0",
-    "command_name": "remote-adcs_request_on_behalf",
     "extension_author": "c2biz",
     "original_author": "TrustedSec",
     "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
-    "help": "Requests an enrollment certificate on behalf of another user",
-    "long_help": "This command allows you to take a certificate that has XCN_OID_ENROLLMENT_AGENT as an MSApplicationPolicies extension and allows you to then request a certificate as if you were any other user in the domain.\n\nUsage:  adcs_request_on_behalf [TEMPLATE] [REQUESTER] [ENROLLMENT_AGENT.pfx] [Download_Name]\n\nOn success the newly requested PFX will be available in the cobalt strike downloads tab in other frameworks it is dependent on proper handling of cobalt strike style download messages.\n\n",
-    "depends_on": "coff-loader",
-    "entrypoint": "go",
-    "files": [
-      {
-        "os": "windows",
-        "arch": "amd64",
-        "path": "adcs_request_on_behalf.x64.o"
-      },
-      {
-        "os": "windows",
-        "arch": "386",
-        "path": "adcs_request_on_behalf.x86.o"
-      }
-    ],
-    "arguments": [
-      {
-        "name": "template",
-        "desc": "The Template that you wish to request on behalf of a target user",
-        "type": "wstring",
-        "optional": false
-      },
-      {
-        "name": "requester",
-        "desc": "The domain / username who you want to make the request on behalf of",
-        "type": "wstring",
-        "optional": false
-      },
-      {
-        "name": "enrollment_agent.pfx",
-        "desc": "Local file path to where the .pfx is with OID_ENROLLMENT_AGENT extension",
-        "type": "string",
-        "optional": false
-      },
-      {
-        "name": "download_name",
-        "desc": "(WARN: incomplete) Name you want this file to have when downloaded by the C2 framework",
-        "type": "file",
-        "optional": false
-      }
+    "commands": [
+        {
+            "command_name": "remote-adcs_request_on_behalf",
+            "help": "Request an enrollment certificate on behalf of another user",
+            "long_help": "Uses an enrollment agent certificate (with XCN_OID_ENROLLMENT_AGENT in MSApplicationPolicies) to request a certificate as another user in the domain. On success, the resulting PFX is downloaded via the C2 framework's file download mechanism.",
+            "depends_on": "coff-loader",
+            "entrypoint": "go",
+            "files": [
+                {
+                    "os": "windows",
+                    "arch": "amd64",
+                    "path": "adcs_request_on_behalf.x64.o"
+                },
+                {
+                    "os": "windows",
+                    "arch": "386",
+                    "path": "adcs_request_on_behalf.x86.o"
+                }
+            ],
+            "arguments": [
+                {
+                    "name": "template",
+                    "desc": "Certificate template to request on behalf of the target user",
+                    "type": "wstring",
+                    "optional": false
+                },
+                {
+                    "name": "requester",
+                    "desc": "Domain\\username to request the certificate on behalf of (e.g., EXAMPLE\\Administrator)",
+                    "type": "wstring",
+                    "optional": false
+                },
+                {
+                    "name": "download-name",
+                    "desc": "Filename for the downloaded PFX (e.g., Admin.pfx)",
+                    "type": "string",
+                    "optional": false
+                },
+                {
+                    "name": "enrollment-cert",
+                    "desc": "Path to enrollment agent PFX file with OID_ENROLLMENT_AGENT extension",
+                    "type": "file",
+                    "optional": false
+                }
+            ]
+        }
     ]
 }

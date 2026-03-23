@@ -81,7 +81,7 @@ HRESULT Wmi_Initialize(WMI* pWmi)
 		NULL, 
 		COINIT_APARTMENTTHREADED
 	);
-	if (FAILED(hr))
+	if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
 	{
 		BeaconPrintf(CALLBACK_ERROR, "OLE32$CoInitializeEx failed: 0x%08lx", hr);
 		goto fail;

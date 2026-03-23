@@ -353,9 +353,16 @@ VOID go(
 	{
 		return;
 	}
-
-	CHECK_RETURN_FAIL(OLE32$CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
-	fCoInit = TRUE;
+	HRESULT hr = OLE32$CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+	if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
+	{
+		internal_printf("Failed to initialize com\n");
+		goto fail;
+	}
+	if(!FAILED(hr))
+	{
+		fCoInit = TRUE;
+	}
 	hCertStore = LoadCert(enrollmentCert, NULL, cbenrollmentCert, 0, &pCert);
 
 

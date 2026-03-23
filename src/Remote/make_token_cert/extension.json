@@ -1,38 +1,44 @@
 {
-    "name": "make_token_cert",
+    "name": "Make Token Cert (Remote)",
+    "package_name": "remote-make_token_cert",
     "version": "0.0.0",
-    "command_name": "remote-make_token_cert",
     "extension_author": "c2biz",
     "original_author": "TrustedSec",
     "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
-    "help": "Applies an impersonation token based on the Alt Name in a supplied .pfx file",
-    "long_help": "Takes the path to a .pfx and optionally the password to decrypt the .pfx. Reads it into the certificate store for the current user and creates an impersonation token with it. Then deletes it from the users certificate store.\n\nUsage make_token_cert <path to .pfx> [opt: password]\n\n",
-    "depends_on": "coff-loader",
-    "entrypoint": "go",
-    "files": [
-      {
-        "os": "windows",
-        "arch": "amd64",
-        "path": "make_token_cert.x64.o"
-      },
-      {
-        "os": "windows",
-        "arch": "386",
-        "path": "make_token_cert.x86.o"
-      }
-    ],
-    "arguments": [
-      {
-        "name": "pfx",
-        "desc": "path to .pfx",
-        "type": "file",
-        "optional": false
-      },
-      {
-        "name": "password",
-        "desc": "pfx password",
-        "type": "wstring",
-        "optional": true
-      }
+    "commands": [
+        {
+            "command_name": "remote-make_token_cert",
+            "help": "Create an impersonation token from a certificate PFX file",
+            "long_help": "Reads a PFX certificate file, imports it into the current user's certificate store, creates an impersonation token based on the certificate's Alt Name via PKINIT, then removes the certificate from the store. Useful for leveraging ADCS-obtained certificates for authentication.",
+            "depends_on": "coff-loader",
+            "entrypoint": "go",
+            "files": [
+                {
+                    "os": "windows",
+                    "arch": "amd64",
+                    "path": "make_token_cert.x64.o"
+                },
+                {
+                    "os": "windows",
+                    "arch": "386",
+                    "path": "make_token_cert.x86.o"
+                }
+            ],
+            "arguments": [
+                {
+                    "name": "pfx",
+                    "desc": "Path to PFX certificate file",
+                    "type": "file",
+                    "optional": false
+                },
+                {
+                    "name": "password",
+                    "desc": "Password to decrypt the PFX. Omit if no password",
+                    "type": "wstring",
+                    "optional": true,
+                    "default": ""
+                }
+            ]
+        }
     ]
 }
