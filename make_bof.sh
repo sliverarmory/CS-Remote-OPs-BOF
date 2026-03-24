@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # variables
-HOME=$(pwd)
+REPOROOT=$(pwd)
 BOF=$1
 BOFTYPE=$2
-SRCDIR="$HOME/src/$BOFTYPE/$BOF"
-OUTDIR="$HOME/$BOFTYPE/$BOF"
-PKGS=$HOME/packages
+SRCDIR="$REPOROOT/src/$BOFTYPE/$BOF"
+OUTDIR="$REPOROOT/$BOFTYPE/$BOF"
+PKGS=$REPOROOT/packages
 
 # compile
 echo "[+] Changing directory: $SRCDIR"
