@@ -55,6 +55,7 @@ jobs:
           set -euo pipefail
           bash -n make_bof.sh scripts/build_all_packages.sh scripts/check_restored_objects.sh scripts/verify_actions_artifact.sh scripts/verify_release_metadata.sh tests/run_safety_tests.sh
           python3 -m py_compile scripts/check_release_inventory.py scripts/check_release_version.py
+          python3 tests/archive_format_test.py
           python3 tests/lastpass_parser_test.py
           python3 tests/release_version_test.py
           tests/run_safety_tests.sh
@@ -178,12 +179,13 @@ jobs:
         run: |
           set -euo pipefail
           cp tests/sliver_abi_test.go .sliver-abi/client/command/extensions/cs_remote_ops_abi_test.go
+          cp tests/sliver_archive_test.go .sliver-abi/client/command/extensions/cs_remote_ops_archive_test.go
           cd .sliver-abi
           # This is a focused external-checkout integration test. The final
           # local release validation also runs Sliver's ./go-tests.sh wrapper.
           CS_REMOTE_OPS_REPO="$GITHUB_WORKSPACE" GOFLAGS=-mod=vendor \
             go test -tags=client,osusergo,netgo,go_sqlite ./client/command/extensions \
-              -run '^TestCSRemoteOpsPackedABI$' -count=1
+              -run '^TestCSRemoteOps(PackedABI|ArchivesInstallable)$' -count=1
 
       - name: Upload unsigned package set
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -88,7 +88,7 @@ mkdir -p "$ARTIFACTS" "$PKGS"
 echo "[+] Compiling: $BOFTYPE/$BOF"
 make -C "$SRCDIR"
 
-ARCHIVE_MEMBERS=(extension.json LICENSE)
+ARCHIVE_MEMBERS=(./extension.json ./LICENSE)
 for relative_path in "${PACKAGE_FILES[@]}"; do
     source_path="$OUTDIR/$relative_path"
     if [[ ! -f "$source_path" || -L "$source_path" ]]; then
@@ -96,7 +96,7 @@ for relative_path in "${PACKAGE_FILES[@]}"; do
         exit 1
     fi
     cp -- "$source_path" "$ARTIFACTS/$relative_path"
-    ARCHIVE_MEMBERS+=("$relative_path")
+    ARCHIVE_MEMBERS+=("./$relative_path")
 done
 
 jq --arg version "$VERSION" '.version = $version' "$MANIFEST_SOURCE" > "$ARTIFACTS/extension.json"

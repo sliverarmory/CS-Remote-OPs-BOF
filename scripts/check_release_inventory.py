@@ -67,6 +67,11 @@ def validate_archive(
     with tarfile.open(archive, "r:gz") as package:
         files: dict[str, tarfile.TarInfo] = {}
         for member in package.getmembers():
+            if not member.isdir() and not member.name.startswith("./"):
+                raise ValueError(
+                    f"{archive.name}: Sliver-incompatible member path {member.name!r} "
+                    "(must start with './')"
+                )
             name = safe_member_name(member.name)
             if member.isdir():
                 continue
