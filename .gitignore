@@ -1,2 +1,8 @@
 # VS Code files for those working on multiple tools
 .vscode/*
+/packages/
+/Injection/clipboard/
+/Remote/*/extension.json
+/src/*/*/artifacts/
+__pycache__/
+*.pyc

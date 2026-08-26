@@ -20,7 +20,7 @@
 #include <dsgetdc.h>
 #include <winhttp.h>
 
-
+#define HKCU_LOCAL_IMP (HKEY)4
 #define intAlloc(size) KERNEL32$HeapAlloc(KERNEL32$GetProcessHeap(), HEAP_ZERO_MEMORY, size)
 #define intRealloc(ptr, size) (ptr) ? KERNEL32$HeapReAlloc(KERNEL32$GetProcessHeap(), HEAP_ZERO_MEMORY, ptr, size) : KERNEL32$HeapAlloc(KERNEL32$GetProcessHeap(), HEAP_ZERO_MEMORY, size)
 #define intFree(addr) KERNEL32$HeapFree(KERNEL32$GetProcessHeap(), 0, addr)
@@ -416,6 +416,7 @@ WINADVAPI LONG WINAPI ADVAPI32$RegQueryValueExW(HKEY hKey,LPCWSTR lpValueName,LP
 WINADVAPI LONG WINAPI ADVAPI32$RegSaveKeyExA(HKEY hKey,LPCSTR lpFile,LPSECURITY_ATTRIBUTES lpSecurityAttributes,DWORD Flags);
 WINADVAPI LONG WINAPI ADVAPI32$RegSetValueExA(HKEY hKey,LPCSTR lpValueName,DWORD Reserved,DWORD dwType,CONST BYTE *lpData,DWORD cbData);
 WINADVAPI LONG WINAPI ADVAPI32$RegSetValueExW(HKEY hKey,LPCWSTR lpValueName,DWORD Reserved,DWORD dwType,CONST BYTE *lpData,DWORD cbData);
+WINADVAPI LONG WINAPI ADVAPI32$RegOpenCurrentUser(REGSAM samDesired, PHKEY phkResult);
 WINADVAPI WINBOOL WINAPI ADVAPI32$InitiateSystemShutdownExA(LPSTR lpMachineName, LPSTR lpMessage, DWORD dwTimeout, BOOL bForceAppsClosed, BOOL bRebootAfterShutdown, DWORD dwReason);
 
 //NTDLL
@@ -874,6 +875,7 @@ WINBASEAPI WINBOOL WINAPI ADVAPI32$SystemFunction036(PVOID RandomBuffer,ULONG Ra
 #define ADVAPI32$RegSaveKeyExA RegSaveKeyExA
 #define ADVAPI32$RegSetValueExA RegSetValueExA
 #define ADVAPI32$RegSetValueExW RegSetValueExW
+#define ADVAPI32$RegOpenCurrentUser RegOpenCurrentUser
 #define ADVAPI32$InitiateSystemShutdownExA InitiateSystemShutdownExA
 
 //NTDLL

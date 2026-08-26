@@ -169,11 +169,9 @@ def parse_glocalkey( data, pid ):
         msg = msg.strip()
         if 'y":"' == msg[:4]:
             msg = msg[4:]
-        try:
-            index = msg.find('","')
+        index = msg.find('","')
+        if index >= 0:
             msg = msg[:index]
-        except:
-            pass
         if msg in ret:
             continue
         ret.append(msg)
@@ -207,7 +205,7 @@ def parse_privkey( data, pid ):
     return ret
 
 def parse_filename( filename ):
-    tmp = '.*lp_(.+?)_(.+)\.txt'
+    tmp = r'.*lp_(.+?)_(.+)\.txt'
     result = re.search( tmp, filename )
     if result == None:
         print("Failed to parse filename")

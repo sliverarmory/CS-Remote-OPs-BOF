@@ -135,7 +135,7 @@ FARPROC DynamicLoad(const char * szLibrary, const char * szFunction)
     HMODULE hMod = NULL;
     DWORD i = 0;
     DWORD liblen = 0;
-    for(i = 0; i < loadedLibrariesCount; i++)
+    for(i = 0; i < loadedLibrariesCount && i < DYNAMIC_LIB_COUNT; i++)
     {
         if(intstrcmp(szLibrary, loadedLibraries[i].name))
         {
@@ -144,6 +144,11 @@ FARPROC DynamicLoad(const char * szLibrary, const char * szFunction)
     }
     if(!hMod)
     {
+        if(loadedLibrariesCount >= DYNAMIC_LIB_COUNT)
+        {
+            BeaconPrintf(CALLBACK_ERROR, "*** DynamicLoad(%s) FAILED!\nDynamic library limit reached.", szLibrary);
+            return NULL;
+        }
         hMod = LoadLibraryA(szLibrary);
         if(!hMod){ 
             BeaconPrintf(CALLBACK_ERROR, "*** DynamicLoad(%s) FAILED!\nCould not find library to load.", szLibrary);
@@ -322,6 +327,24 @@ SetPrivilege_end:
 //release any global functions here
 void bofstop()
 {
+#ifdef DYNAMIC_LIB_COUNT
+    DWORD i = 0;
+    DWORD libraryCount = loadedLibrariesCount;
+    if(libraryCount > DYNAMIC_LIB_COUNT)
+    {
+        libraryCount = DYNAMIC_LIB_COUNT;
+    }
+    for(i = 0; i < libraryCount; i++)
+    {
+        if(loadedLibraries[i].hMod != NULL)
+        {
+            FreeLibrary(loadedLibraries[i].hMod);
+        }
+        loadedLibraries[i].hMod = NULL;
+        loadedLibraries[i].name = NULL;
+    }
+    loadedLibrariesCount = 0;
+#endif
 
     return;
 }

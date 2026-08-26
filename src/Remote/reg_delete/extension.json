@@ -34,10 +34,10 @@
                 },
                 {
                     "name": "hive",
-                    "desc": "Registry hive: 0=HKCR, 1=HKCU, 2=HKLM, 3=HKU",
+                    "desc": "Registry hive: 0=HKCR, 1=HKCU, 2=HKLM, 3=HKU, 4=impersonated user's local HKCU (local host only)",
                     "type": "integer",
                     "optional": false,
-                    "choices": ["0", "1", "2", "3"]
+                    "choices": ["0", "1", "2", "3", "4"]
                 },
                 {
                     "name": "path",

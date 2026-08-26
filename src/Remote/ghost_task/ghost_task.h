@@ -17,6 +17,12 @@ typedef enum _TASK_OPERATION {
     TaskDeleteOperation
 } TASK_OPERATION, * PTASK_OPERATION;
 
+typedef enum _TASK_GUID_RESULT {
+    TaskGuidAbsent,
+    TaskGuidFound,
+    TaskGuidInvalid
+} TASK_GUID_RESULT;
+
 typedef struct Arguments {
     LPCSTR computerName;
     TASK_OPERATION taskOperation;

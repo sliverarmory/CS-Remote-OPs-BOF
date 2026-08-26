@@ -7,6 +7,17 @@ DWORD savereg(HKEY hive, const char * regpath, const char * outfile)
 {
 	DWORD dwresult = 0;
 	HKEY rootkey = NULL;
+	HKEY hkcu_imp = NULL;
+	if(hive == HKCU_LOCAL_IMP)
+	{
+		dwresult = ADVAPI32$RegOpenCurrentUser(KEY_READ, &hkcu_imp);
+		if(dwresult)
+		{
+			internal_printf("RegOpenCurrentuser failed (%lX)\n", dwresult);
+			goto savereg_end;
+		}
+		hive = hkcu_imp;
+	}
 
 	dwresult = ADVAPI32$RegOpenKeyExA(hive, regpath, 0, KEY_READ, &rootkey);
 	if(ERROR_SUCCESS != dwresult)
@@ -14,6 +25,7 @@ DWORD savereg(HKEY hive, const char * regpath, const char * outfile)
 		internal_printf("RegOpenKeyExA failed (%lX)\n", dwresult); 
 		goto savereg_end;
 	}
+
 
 	dwresult = ADVAPI32$RegSaveKeyExA(rootkey, outfile, NULL, REG_LATEST_FORMAT);
 	if(ERROR_SUCCESS != dwresult)
@@ -27,6 +39,10 @@ DWORD savereg(HKEY hive, const char * regpath, const char * outfile)
 savereg_end:
 	if(rootkey){
 		ADVAPI32$RegCloseKey(rootkey);
+	}
+	if(hkcu_imp)
+	{
+		ADVAPI32$RegCloseKey(hkcu_imp);
 	}
 
 	return dwresult;
@@ -51,7 +67,7 @@ VOID go(
 	t = BeaconDataInt(&parser);
     #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 	#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-	hive = (HKEY)((DWORD) hive + (DWORD)t);
+	hive = ((HKEY)t == HKCU_LOCAL_IMP) ? HKCU_LOCAL_IMP :(HKEY)((DWORD) hive + (DWORD)t);
     #pragma GCC diagnostic pop
 
 	if(!bofstart())

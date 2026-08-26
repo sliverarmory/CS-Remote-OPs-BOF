@@ -1,0 +1,93 @@
+{
+  "name": "ghost_task",
+  "package_name": "remote-ghost_task",
+  "version": "0.0.0",
+  "extension_author": "TrustedSec",
+  "original_author": "TrustedSec",
+  "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
+  "commands": [
+    {
+      "command_name": "remote-ghost_task",
+      "help": "Create or delete scheduled tasks through direct registry manipulation",
+      "long_help": "Use operation=delete with computer-name and task-name. For operation=add, program, username, and schedule-type are required; second/daily/weekly schedules also require time, and weekly requires days. Use computer-name=localhost for the current system.",
+      "depends_on": "coff-loader",
+      "entrypoint": "sliver",
+      "files": [
+        {
+          "os": "windows",
+          "arch": "amd64",
+          "path": "ghost_task.x64.o"
+        },
+        {
+          "os": "windows",
+          "arch": "386",
+          "path": "ghost_task.x86.o"
+        }
+      ],
+      "arguments": [
+        {
+          "name": "computer-name",
+          "desc": "Remote computer name, or localhost for the current system",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "operation",
+          "desc": "Task operation",
+          "type": "string",
+          "optional": false,
+          "choices": ["add", "delete"]
+        },
+        {
+          "name": "task-name",
+          "desc": "Scheduled task name",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "program",
+          "desc": "Program to execute when adding a task",
+          "type": "string",
+          "optional": true,
+          "default": ""
+        },
+        {
+          "name": "program-arguments",
+          "desc": "Arguments passed to the program",
+          "type": "string",
+          "optional": true,
+          "default": ""
+        },
+        {
+          "name": "username",
+          "desc": "Account under which the task runs",
+          "type": "string",
+          "optional": true,
+          "default": ""
+        },
+        {
+          "name": "schedule-type",
+          "desc": "Trigger type: second, daily, weekly, or logon",
+          "type": "string",
+          "optional": true,
+          "default": "",
+          "choices": ["second", "daily", "weekly", "logon"]
+        },
+        {
+          "name": "time",
+          "desc": "Seconds for a second trigger, or HH:MM for daily and weekly triggers",
+          "type": "string",
+          "optional": true,
+          "default": ""
+        },
+        {
+          "name": "days",
+          "desc": "Comma-separated weekdays for a weekly trigger",
+          "type": "string",
+          "optional": true,
+          "default": ""
+        }
+      ]
+    }
+  ]
+}

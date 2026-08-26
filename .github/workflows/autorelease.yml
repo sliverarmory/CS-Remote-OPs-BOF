@@ -2,293 +2,696 @@ name: Release
 
 on:
   push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
-    branches: [master]
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
-  bof-build:
-    name: Build and publish tagged release
-    if: startsWith( github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    container:
-      image: freefirex2/ts_bof_builder@sha256:e203ba628c97abb51ef65914b216fa1e088401710107027c353d15f09e0cfb62
-    timeout-minutes: 10
+  validate-tag:
+    name: Validate version tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: OS Packages
-        run: dnf install -y jq
-
-      - name: Minisign
+      - name: Validate release tag syntax
+        shell: bash
         run: |
-          MINISIGN_TMP=`mktemp -d`
-          cd $MINISIGN_TMP
-          curl -sL -o minisign-linux-amd64.tar.gz https://github.com/aead/minisign/releases/download/v0.2.0/minisign-linux-amd64.tar.gz
-          tar xvf minisign-linux-amd64.tar.gz
-          mv ./minisign ~/minisign
-          touch ~/minisign.key && chmod 600 ~/minisign.key
-          echo -e "${{ secrets.MINISIGN_PRIVATE_KEY }}" > ~/minisign.key
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "ERROR: release ref must be a tag matching vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
 
-      - name: Check out code
-        uses: actions/checkout@v2
+  build:
+    name: Secretless package build
+    needs: validate-tag
+    uses: ./.github/workflows/dev.yml
+    permissions:
+      contents: read
+    with:
+      package_version: ${{ github.ref_name }}
 
-      - name: Git Fetch Tags
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git fetch --prune --unshallow --tags -f
-
-      - name: Packages Setup
-        run: |
-          mkdir packages
-
-      - name: ProcessDestroy
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ProcessDestroy Remote
-
-      - name: ProcessListHandles
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ProcessListHandles Remote
-          
-      - name: adcs_request
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh adcs_request Remote
-
-      - name: adduser
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh adduser Remote
-
-      - name: addusertogroup
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh addusertogroup Remote
-
-      - name: chromeKey
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh chromeKey Remote
-
-      - name: enableuser
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh enableuser Remote
-
-      - name: office_tokens
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh office_tokens Remote
-
-      - name: procdump
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh procdump Remote
-
-      - name: reg_delete
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh reg_delete Remote
-
-      - name: reg_save
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh reg_save Remote
-
-      - name: reg_set
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh reg_set Remote
-
-      - name: sc_config
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_config Remote
-
-      - name: sc_create
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_create Remote
-
-      - name: sc_delete
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_delete Remote
-
-      - name: sc_description
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_description Remote
-
-      - name: sc_start
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_start Remote
-
-      - name: sc_stop
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_stop Remote
-
-      - name: schtaskscreate
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh schtaskscreate Remote
-
-      - name: schtasksdelete
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh schtasksdelete Remote
-
-      - name: schtasksrun
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh schtasksrun Remote
-
-      - name: schtasksstop
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh schtasksstop Remote
-
-      - name: setuserpass
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh setuserpass Remote
-
-      - name: shspawnas
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh shspawnas Remote
-
-      - name: suspendresume
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh suspendresume Remote
-
-      - name: unexpireuser
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh unexpireuser Remote
-
-      - name: get_priv
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh get_priv Remote
-
-      - name: sc_failure
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh sc_failure Remote
-
-      - name: slack_cookie
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh slack_cookie Remote
-
-      - name: adcs_request_on_behalf
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh adcs_request_on_behalf Remote
-
-      - name: global_unprotect
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh global_unprotect Remote
-
-      - name: make_token_cert
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh make_token_cert Remote
-
-      - name: slackKey
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh slackKey Remote
-
-      - name: ask_mfa
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ask_mfa Remote
-
-      - name: disableuser
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh disableuser Remote
-
-      - name: get_azure_token
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh get_azure_token Remote
-
-      - name: shutdown
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh shutdown Remote
-
-      - name: clipboard
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh clipboard Injection
-
-      - name: conhost
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh conhost Injection
-
-      - name: createremotethread
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh createremotethread Injection
-
-      - name: ctray
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ctray Injection
-
-      - name: dde
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh dde Injection
-
-      - name: kernelcallbacktable
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh kernelcallbacktable Injection
-
-      - name: ntcreatethread
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ntcreatethread Injection
-
-      - name: ntqueueapcthread
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh ntqueueapcthread Injection
-
-      - name: setthreadcontext
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh setthreadcontext Injection
-
-      - name: svcctrl
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh svcctrl Injection
-
-      - name: tooltip
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh tooltip Injection
-
-      - name: uxsubclassinfo
-        run: |
-          chmod +x ./make_bof.sh
-          ./make_bof.sh uxsubclassinfo Injection
-
-      - name: "Publish Release"
-        uses: "marvinpinto/action-automatic-releases@latest"
+  release-ready:
+    name: Revalidate release inputs
+    needs:
+      - validate-tag
+      - build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    env:
+      ARMORY_INDEX_PUBLIC_KEY: RWSBpxpRWDrD7Fe+VvRE3c2VEDC2NK80rlNCj+BX0gz44Xw07r6KQD9L
+      PACKAGE_REPO_URL: https://github.com/sliverarmory/CS-Remote-OPs-BOF
+    outputs:
+      ready: ${{ steps.authority.outputs.ready }}
+      tag_commit: ${{ steps.authority.outputs.tag_commit }}
+    steps:
+      - name: Check out tagged package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: false
-          files: |
-            ./packages/*.tar.gz
-            ./packages/*.minisig
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download verified release metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.release_metadata_artifact_id }}
+          path: release-metadata
+          merge-multiple: true
+
+      - name: Install verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes minisign jq
+
+      - name: Verify metadata, tag, branch, and release absence
+        id: authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          resolve_verified_tag() {
+            local tag_ref tag_object
+            tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")
+            if [[ $(jq -r '.object.type' <<<"$tag_ref") != "tag" ]]; then
+              echo "ERROR: release ref must be a signed annotated tag" >&2
+              return 1
+            fi
+            tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$(jq -r '.object.sha' <<<"$tag_ref")")
+            if [[ $(jq -r '.tag' <<<"$tag_object") != "$GITHUB_REF_NAME" ||
+                  $(jq -r '.object.type' <<<"$tag_object") != "commit" ||
+                  $(jq -r '.verification.verified' <<<"$tag_object") != "true" ]]; then
+              echo "ERROR: release ref is not an exact-name, verified, directly annotated commit" >&2
+              return 1
+            fi
+            jq -r '.object.sha' <<<"$tag_object"
+          }
+
+          require_default_branch_descendant() {
+            local tag_commit=$1
+            local default_branch comparison
+            default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+            comparison=$(gh api "repos/$GITHUB_REPOSITORY/compare/$tag_commit...$default_branch")
+            if [[ $(jq -r '.merge_base_commit.sha' <<<"$comparison") != "$tag_commit" ||
+                  ! $(jq -r '.status' <<<"$comparison") =~ ^(ahead|identical)$ ]]; then
+              echo "ERROR: verified tag commit is not an ancestor of $default_branch" >&2
+              return 1
+            fi
+          }
+
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "ERROR: release ref must be a strict semantic-version tag" >&2
+            exit 1
+          fi
+          tag_commit=$(resolve_verified_tag)
+          checkout_commit=$(git rev-parse HEAD)
+          if [[ "$checkout_commit" != "$tag_commit" ]]; then
+            echo "ERROR: checked-out source $checkout_commit does not match peeled tag commit $tag_commit" >&2
+            exit 1
+          fi
+          scripts/verify_actions_artifact.sh \
+            '${{ needs.build.outputs.release_metadata_artifact_id }}' \
+            '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
+            release-metadata
+          cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
+          EXPECTED_SOURCE_COMMIT="$tag_commit" scripts/verify_release_metadata.sh release-metadata >/dev/null
+          require_default_branch_descendant "$tag_commit"
+
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq '[.[][]]' > "$RUNNER_TEMP/releases.json"
+          python3 scripts/check_release_version.py \
+            --candidate "$GITHUB_REF_NAME" \
+            --releases-json "$RUNNER_TEMP/releases.json" >/dev/null
+          if jq -e --arg tag "$GITHUB_REF_NAME" \
+            'any(.[]; .tag_name == $tag and .draft == false)' \
+            "$RUNNER_TEMP/releases.json" >/dev/null; then
+            echo "ERROR: a published release already uses $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          {
+            printf 'ready=true\n'
+            printf 'tag_commit=%s\n' "$tag_commit"
+          } >> "$GITHUB_OUTPUT"
+
+  sign:
+    name: Sign validated packages
+    needs:
+      - build
+      - release-ready
+    if: ${{ needs.release-ready.outputs.ready == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    env:
+      ARMORY_INDEX_PUBLIC_KEY: RWSBpxpRWDrD7Fe+VvRE3c2VEDC2NK80rlNCj+BX0gz44Xw07r6KQD9L
+      PACKAGE_REPO_URL: https://github.com/sliverarmory/CS-Remote-OPs-BOF
+      TAG_COMMIT: ${{ needs.release-ready.outputs.tag_commit }}
+    steps:
+      - name: Check out tagged package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download unsigned package set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: unsigned-bof-packages
+          path: packages
+
+      - name: Download verified release metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.release_metadata_artifact_id }}
+          path: release-metadata
+          merge-multiple: true
+
+      - name: Install signature verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes minisign jq
+
+      - name: Reverify metadata and unsigned package set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ $(git rev-parse HEAD) != "$TAG_COMMIT" ]]; then
+            echo "ERROR: signing checkout does not match peeled tag commit $TAG_COMMIT" >&2
+            exit 1
+          fi
+          scripts/verify_actions_artifact.sh \
+            '${{ needs.build.outputs.release_metadata_artifact_id }}' \
+            '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
+            release-metadata
+          cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
+          package_public_key=$(EXPECTED_SOURCE_COMMIT="$TAG_COMMIT" scripts/verify_release_metadata.sh release-metadata)
+          printf 'PACKAGE_PUBLIC_KEY=%s\n' "$package_public_key" >> "$GITHUB_ENV"
+          python3 scripts/check_release_inventory.py \
+            --inventory release-metadata/armory-package-inventory.txt \
+            --packages-dir packages \
+            --repo-url "$PACKAGE_REPO_URL" \
+            --tag "$GITHUB_REF_NAME" \
+            --index release-metadata/armory.json
+
+      - name: Sign and verify all 51 package pairs
+        env:
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z ${MINISIGN_PRIVATE_KEY:-} ]]; then
+            echo "ERROR: repository secret MINISIGN_PRIVATE_KEY is not configured" >&2
+            exit 1
+          fi
+          umask 077
+          key_dir=$(mktemp -d)
+          key_file="$key_dir/minisign.key"
+          public_key_file="$key_dir/minisign.pub"
+          cleanup_key() {
+            rm -f -- "$key_file" "$public_key_file"
+            rmdir "$key_dir" 2>/dev/null || true
+          }
+          trap cleanup_key EXIT INT TERM
+          # Preserve compatibility with the existing repository secret, which
+          # may contain either raw newlines or the historical literal \n form.
+          if [[ "$MINISIGN_PRIVATE_KEY" == *$'\n'* ]]; then
+            printf '%s' "$MINISIGN_PRIVATE_KEY" > "$key_file"
+          else
+            printf '%b' "$MINISIGN_PRIVATE_KEY" > "$key_file"
+          fi
+          if [[ -n $(tail -c 1 "$key_file") ]]; then
+            printf '\n' >> "$key_file"
+          fi
+          chmod 600 "$key_file"
+          printf '\n' | minisign -R -s "$key_file" -p "$public_key_file"
+          recovered_public_key=$(sed -n '2p' "$public_key_file")
+          if [[ "$recovered_public_key" != "$PACKAGE_PUBLIC_KEY" ]]; then
+            echo "ERROR: repository signing key does not match the signed Armory index" >&2
+            exit 1
+          fi
+
+          inventory=release-metadata/armory-package-inventory.txt
+          while IFS= read -r package_name; do
+            archive="packages/$package_name.tar.gz"
+            signature="packages/$package_name.minisig"
+            manifest="$RUNNER_TEMP/$package_name.signed-manifest.json"
+            tar -xOzf "$archive" extension.json > "$manifest"
+            trusted_comment=$(base64 -w 0 < "$manifest")
+            printf '\n' | minisign -S -s "$key_file" -m "$archive" -t "$trusted_comment" -x "$signature"
+            minisign -Vm "$archive" -x "$signature" -P "$PACKAGE_PUBLIC_KEY"
+            if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
+              echo "ERROR: trusted manifest mismatch for $package_name" >&2
+              exit 1
+            fi
+          done < "$inventory"
+
+          cleanup_key
+          trap - EXIT INT TERM
+          unset MINISIGN_PRIVATE_KEY
+
+          python3 scripts/check_release_inventory.py \
+            --inventory "$inventory" \
+            --packages-dir packages \
+            --repo-url "$PACKAGE_REPO_URL" \
+            --tag "$GITHUB_REF_NAME" \
+            --index release-metadata/armory.json \
+            --require-signatures
+          test "$(find packages -maxdepth 1 -type f | wc -l)" -eq 102
+
+      - name: Upload signed package set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-bof-packages
+          path: packages/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Verify upload and publish release
+    needs:
+      - build
+      - release-ready
+      - sign
+    if: ${{ needs.release-ready.outputs.ready == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    env:
+      ARMORY_INDEX_PUBLIC_KEY: RWSBpxpRWDrD7Fe+VvRE3c2VEDC2NK80rlNCj+BX0gz44Xw07r6KQD9L
+      PACKAGE_REPO_URL: https://github.com/sliverarmory/CS-Remote-OPs-BOF
+      TAG_COMMIT: ${{ needs.release-ready.outputs.tag_commit }}
+    steps:
+      - name: Check out tagged package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download signed package set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-bof-packages
+          path: packages
+
+      - name: Download verified release metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.release_metadata_artifact_id }}
+          path: release-metadata
+          merge-multiple: true
+
+      - name: Install signature verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes minisign jq
+
+      - name: Reverify signed package and metadata inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ $(git rev-parse HEAD) != "$TAG_COMMIT" ]]; then
+            echo "ERROR: publish checkout does not match peeled tag commit $TAG_COMMIT" >&2
+            exit 1
+          fi
+          scripts/verify_actions_artifact.sh \
+            '${{ needs.build.outputs.release_metadata_artifact_id }}' \
+            '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
+            release-metadata
+          cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
+          package_public_key=$(EXPECTED_SOURCE_COMMIT="$TAG_COMMIT" scripts/verify_release_metadata.sh release-metadata)
+          printf 'PACKAGE_PUBLIC_KEY=%s\n' "$package_public_key" >> "$GITHUB_ENV"
+          python3 scripts/check_release_inventory.py \
+            --inventory release-metadata/armory-package-inventory.txt \
+            --packages-dir packages \
+            --repo-url "$PACKAGE_REPO_URL" \
+            --tag "$GITHUB_REF_NAME" \
+            --index release-metadata/armory.json \
+            --require-signatures
+
+          while IFS= read -r package_name; do
+            archive="packages/$package_name.tar.gz"
+            signature="packages/$package_name.minisig"
+            manifest="$RUNNER_TEMP/$package_name.publish-manifest.json"
+            minisign -Vm "$archive" -x "$signature" -P "$package_public_key"
+            tar -xOzf "$archive" extension.json > "$manifest"
+            trusted_comment=$(base64 -w 0 < "$manifest")
+            if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
+              echo "ERROR: trusted manifest mismatch for $package_name" >&2
+              exit 1
+            fi
+          done < release-metadata/armory-package-inventory.txt
+
+      - name: Create run-owned draft, verify upload, and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          resolve_verified_tag() {
+            local tag_ref tag_object
+            tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")
+            if [[ $(jq -r '.object.type' <<<"$tag_ref") != "tag" ]]; then
+              echo "ERROR: release ref is no longer an annotated tag" >&2
+              return 1
+            fi
+            tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$(jq -r '.object.sha' <<<"$tag_ref")")
+            if [[ $(jq -r '.tag' <<<"$tag_object") != "$GITHUB_REF_NAME" ||
+                  $(jq -r '.object.type' <<<"$tag_object") != "commit" ||
+                  $(jq -r '.verification.verified' <<<"$tag_object") != "true" ]]; then
+              echo "ERROR: release ref is not an exact-name, verified, directly annotated commit" >&2
+              return 1
+            fi
+            jq -r '.object.sha' <<<"$tag_object"
+          }
+
+          require_default_branch_descendant() {
+            local tag_commit=$1
+            local default_branch comparison
+            default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+            comparison=$(gh api "repos/$GITHUB_REPOSITORY/compare/$tag_commit...$default_branch")
+            if [[ $(jq -r '.merge_base_commit.sha' <<<"$comparison") != "$tag_commit" ||
+                  ! $(jq -r '.status' <<<"$comparison") =~ ^(ahead|identical)$ ]]; then
+              echo "ERROR: verified tag commit is not an ancestor of $default_branch" >&2
+              return 1
+            fi
+          }
+
+          list_all_releases() {
+            local output=$1
+            gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              | jq '[.[][]]' > "$output"
+          }
+
+          validate_managed_releases() {
+            local releases_file=$1
+            local marker_prefix=$2
+            jq -e \
+              --arg tag "$GITHUB_REF_NAME" \
+              --arg prefix "$marker_prefix" '
+                all(.[];
+                  .draft == true
+                  and .prerelease == false
+                  and .tag_name == $tag
+                  and .name == $tag
+                  and .author.login == "github-actions[bot]"
+                  and .author.id == 41898282
+                  and (.body | type == "string")
+                  and ((.body | split("\n")[0]) as $line
+                    | ($line | startswith($prefix))
+                    and (($line | ltrimstr($prefix)) | test("^[0-9]+ run_attempt=[0-9]+ -->$"))))
+              ' "$releases_file" >/dev/null
+          }
+
+          prepare_release_slot() {
+            local releases_file="$RUNNER_TEMP/releases-before-draft.json"
+            local matching_file="$RUNNER_TEMP/same-tag-before-draft.json"
+            local remaining_file="$RUNNER_TEMP/same-tag-after-recovery.json"
+            list_all_releases "$releases_file"
+            python3 scripts/check_release_version.py \
+              --candidate "$GITHUB_REF_NAME" \
+              --releases-json "$releases_file" >/dev/null
+            jq --arg tag "$GITHUB_REF_NAME" '[.[] | select(.tag_name == $tag)]' \
+              "$releases_file" > "$matching_file"
+
+            if [[ $(jq 'length' "$matching_file") -gt 0 ]]; then
+              if ! validate_managed_releases "$matching_file" "$managed_marker_prefix"; then
+                echo "ERROR: same-tag release set contains a published, manual, unmarked, or mismatched draft; nothing was deleted" >&2
+                return 1
+              fi
+              while IFS= read -r managed_id; do
+                live_release=$(gh api "repos/$GITHUB_REPOSITORY/releases/$managed_id")
+                jq -e --argjson id "$managed_id" '.id == $id' <<<"$live_release" >/dev/null
+                jq -n --argjson release "$live_release" '[$release]' > "$RUNNER_TEMP/live-managed-release.json"
+                if ! validate_managed_releases "$RUNNER_TEMP/live-managed-release.json" "$managed_marker_prefix"; then
+                  echo "ERROR: workflow-managed draft $managed_id changed after classification; refusing to delete it" >&2
+                  return 1
+                fi
+                echo "Removing validated workflow-managed orphan draft $managed_id" >&2
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$managed_id" >/dev/null
+              done < <(jq -r '.[].id' "$matching_file")
+            fi
+
+            list_all_releases "$releases_file"
+            jq --arg tag "$GITHUB_REF_NAME" '[.[] | select(.tag_name == $tag)]' \
+              "$releases_file" > "$remaining_file"
+            if [[ $(jq 'length' "$remaining_file") -ne 0 ]]; then
+              echo "ERROR: same-tag release appeared or remained after orphan recovery" >&2
+              return 1
+            fi
+          }
+
+          tag_commit=$(resolve_verified_tag)
+          if [[ "$tag_commit" != "$TAG_COMMIT" ]]; then
+            echo "ERROR: release tag moved from peeled commit $TAG_COMMIT to $tag_commit" >&2
+            exit 1
+          fi
+          require_default_branch_descendant "$TAG_COMMIT"
+
+          managed_marker_prefix="<!-- managed-by=sliverarmory-cs-remote-ops-autorelease-v1 repository=$GITHUB_REPOSITORY workflow=autorelease.yml tag=$GITHUB_REF_NAME commit=$TAG_COMMIT run_id="
+          release_marker="${managed_marker_prefix}${GITHUB_RUN_ID} run_attempt=${GITHUB_RUN_ATTEMPT} -->"
+          release_body=$(printf '%s\n\nSigned Sliver Armory package release %s.' "$release_marker" "$GITHUB_REF_NAME")
+
+          prepare_release_slot
+
+          draft_id=""
+          cleanup_owned_draft() {
+            local cleanup_json cleanup_releases cleanup_matches cleanup_id
+            cleanup_id="$draft_id"
+            if [[ -z "$cleanup_id" ]]; then
+              cleanup_releases="$RUNNER_TEMP/cleanup-releases.json"
+              cleanup_matches="$RUNNER_TEMP/cleanup-matches.json"
+              if ! list_all_releases "$cleanup_releases" 2>/dev/null; then
+                return
+              fi
+              jq --arg tag "$GITHUB_REF_NAME" --arg body "$release_body" \
+                '[.[] | select(.tag_name == $tag and .body == $body)]' \
+                "$cleanup_releases" > "$cleanup_matches"
+              if [[ $(jq 'length' "$cleanup_matches") -ne 1 ]] ||
+                 ! validate_managed_releases "$cleanup_matches" "$managed_marker_prefix"; then
+                return
+              fi
+              cleanup_id=$(jq -r '.[0].id' "$cleanup_matches")
+            fi
+            if cleanup_json=$(gh api "repos/$GITHUB_REPOSITORY/releases/$cleanup_id" 2>/dev/null); then
+              if jq -e \
+                --arg tag "$GITHUB_REF_NAME" \
+                --arg body "$release_body" \
+                --argjson id "$cleanup_id" '
+                  .id == $id
+                  and .tag_name == $tag
+                  and .name == $tag
+                  and .body == $body
+                  and .author.login == "github-actions[bot]"
+                  and .author.id == 41898282
+                  and .draft == true
+                  and .prerelease == false
+                ' <<<"$cleanup_json" >/dev/null; then
+                echo "Cleaning up run-owned unpublished draft $cleanup_id" >&2
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$cleanup_id" >/dev/null ||
+                  echo "WARNING: could not remove run-owned draft $cleanup_id" >&2
+              fi
+            fi
+          }
+          trap cleanup_owned_draft EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
+          test "$(find packages -maxdepth 1 -type f | wc -l)" -eq 102
+          (cd packages && sha256sum * | LC_ALL=C sort -k2) > "$RUNNER_TEMP/local.sha256"
+          find packages -mindepth 1 -maxdepth 1 -type f -exec basename {} \; \
+            | LC_ALL=C sort > "$RUNNER_TEMP/local-assets.txt"
+
+          draft_json=$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" \
+            -f target_commitish="$TAG_COMMIT" \
+            -f name="$GITHUB_REF_NAME" \
+            -f body="$release_body" \
+            -F draft=true \
+            -F prerelease=false \
+            -f make_latest=false)
+          draft_id=$(jq -er '.id' <<<"$draft_json")
+          jq -e \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg body "$release_body" \
+            --argjson id "$draft_id" '
+              .id == $id
+              and .tag_name == $tag
+              and .name == $tag
+              and .body == $body
+              and .author.login == "github-actions[bot]"
+              and .author.id == 41898282
+              and .draft == true
+              and .prerelease == false
+            ' <<<"$draft_json" >/dev/null
+
+          upload_url=$(jq -er '.upload_url' <<<"$draft_json")
+          upload_base=${upload_url%%\{*}
+          while IFS= read -r -d '' asset; do
+            asset_name=$(basename -- "$asset")
+            curl --fail --silent --show-error \
+              --request POST \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Content-Type: application/octet-stream' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --data-binary "@$asset" \
+              "$upload_base?name=$asset_name" >/dev/null
+          done < <(find packages -mindepth 1 -maxdepth 1 -type f -print0 | LC_ALL=C sort -z)
+
+          gh api "repos/$GITHUB_REPOSITORY/releases/$draft_id" > "$RUNNER_TEMP/draft.json"
+          jq -e \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg body "$release_body" \
+            --argjson id "$draft_id" '
+              .id == $id
+              and .tag_name == $tag
+              and .name == $tag
+              and .body == $body
+              and .author.login == "github-actions[bot]"
+              and .author.id == 41898282
+              and .draft == true
+              and .prerelease == false
+              and (.assets | length) == 102
+              and (.assets | map(.name) | unique | length) == 102
+              and (.assets | map(.id) | unique | length) == 102
+            ' "$RUNNER_TEMP/draft.json" >/dev/null
+          jq -r '.assets[].name' "$RUNNER_TEMP/draft.json" | LC_ALL=C sort > "$RUNNER_TEMP/draft-assets.txt"
+          diff -u "$RUNNER_TEMP/local-assets.txt" "$RUNNER_TEMP/draft-assets.txt"
+          jq -r '.assets[] | [.name, (.id | tostring)] | @tsv' "$RUNNER_TEMP/draft.json" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/verified-asset-ids.txt"
+
+          remote_dir="$RUNNER_TEMP/remote-assets"
+          mkdir -p "$remote_dir"
+          while IFS=$'\t' read -r asset_name asset_id; do
+            curl --fail --silent --show-error --location \
+              --output "$remote_dir/$asset_name" \
+              --header 'Accept: application/octet-stream' \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+          done < "$RUNNER_TEMP/verified-asset-ids.txt"
+          (cd "$remote_dir" && sha256sum * | LC_ALL=C sort -k2) > "$RUNNER_TEMP/remote.sha256"
+          diff -u "$RUNNER_TEMP/local.sha256" "$RUNNER_TEMP/remote.sha256"
+
+          while IFS= read -r package_name; do
+            archive="$remote_dir/$package_name.tar.gz"
+            signature="$remote_dir/$package_name.minisig"
+            manifest="$RUNNER_TEMP/$package_name.remote-manifest.json"
+            minisign -Vm "$archive" -x "$signature" -P "$PACKAGE_PUBLIC_KEY"
+            tar -xOzf "$archive" extension.json > "$manifest"
+            trusted_comment=$(base64 -w 0 < "$manifest")
+            if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
+              echo "ERROR: remote trusted manifest mismatch for $package_name" >&2
+              exit 1
+            fi
+          done < release-metadata/armory-package-inventory.txt
+
+          current_tag_commit=$(resolve_verified_tag)
+          if [[ "$current_tag_commit" != "$TAG_COMMIT" ]]; then
+            echo "ERROR: release tag moved before publication" >&2
+            exit 1
+          fi
+          require_default_branch_descendant "$TAG_COMMIT"
+
+          final_releases="$RUNNER_TEMP/releases-before-publish.json"
+          final_same_tag="$RUNNER_TEMP/same-tag-before-publish.json"
+          list_all_releases "$final_releases"
+          python3 scripts/check_release_version.py \
+            --candidate "$GITHUB_REF_NAME" \
+            --releases-json "$final_releases" >/dev/null
+          jq --arg tag "$GITHUB_REF_NAME" '[.[] | select(.tag_name == $tag)]' \
+            "$final_releases" > "$final_same_tag"
+          jq -e \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg body "$release_body" \
+            --argjson id "$draft_id" '
+              length == 1
+              and .[0].id == $id
+              and .[0].tag_name == $tag
+              and .[0].name == $tag
+              and .[0].body == $body
+              and .[0].author.login == "github-actions[bot]"
+              and .[0].author.id == 41898282
+              and .[0].draft == true
+              and .[0].prerelease == false
+              and (.[0].assets | length) == 102
+            ' "$final_same_tag" >/dev/null
+          jq -r '.[0].assets[] | [.name, (.id | tostring)] | @tsv' "$final_same_tag" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/final-asset-ids.txt"
+          diff -u "$RUNNER_TEMP/verified-asset-ids.txt" "$RUNNER_TEMP/final-asset-ids.txt"
+
+          current_index_dir="$RUNNER_TEMP/current-armory-index"
+          mkdir -p "$current_index_dir"
+          carried_index_tag=$(<release-metadata/armory-release-tag.txt)
+          latest_before=$(gh api repos/sliverarmory/armory/releases/latest --jq .tag_name)
+          if [[ "$latest_before" != "$carried_index_tag" ]]; then
+            echo "ERROR: latest Armory index changed after the build" >&2
+            exit 1
+          fi
+          gh release download "$latest_before" \
+            --repo sliverarmory/armory \
+            --pattern armory.json \
+            --pattern armory.minisig \
+            --dir "$current_index_dir"
+          minisign -Vm "$current_index_dir/armory.json" \
+            -x "$current_index_dir/armory.minisig" \
+            -P "$ARMORY_INDEX_PUBLIC_KEY"
+          latest_after=$(gh api repos/sliverarmory/armory/releases/latest --jq .tag_name)
+          if [[ "$latest_after" != "$latest_before" ]]; then
+            echo "ERROR: latest Armory index changed during final verification" >&2
+            exit 1
+          fi
+          cmp release-metadata/armory.json "$current_index_dir/armory.json"
+          cmp release-metadata/armory.minisig "$current_index_dir/armory.minisig"
+
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false \
+            -f make_latest=true >/dev/null
+
+          published=$(gh api "repos/$GITHUB_REPOSITORY/releases/$draft_id")
+          jq -e \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg body "$release_body" \
+            --argjson id "$draft_id" '
+              .id == $id
+              and .tag_name == $tag
+              and .name == $tag
+              and .body == $body
+              and .author.login == "github-actions[bot]"
+              and .author.id == 41898282
+              and .draft == false
+              and .prerelease == false
+              and (.assets | length) == 102
+              and (.assets | map(.name) | unique | length) == 102
+              and (.assets | map(.id) | unique | length) == 102
+            ' <<<"$published" >/dev/null
+          jq -r '.assets[] | [.name, (.id | tostring)] | @tsv' <<<"$published" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/published-asset-ids.txt"
+          diff -u "$RUNNER_TEMP/verified-asset-ids.txt" "$RUNNER_TEMP/published-asset-ids.txt"
+
+          draft_id=""
+          trap - EXIT INT TERM

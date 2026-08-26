@@ -16,10 +16,10 @@ DWORD delete_regkey(const char * hostname, HKEY hive, const char * path, const c
 
 	if(hostname == NULL)
 	{
-		dwresult = ADVAPI32$RegOpenKeyExA(hive, NULL, 0, KEY_READ | KEY_SET_VALUE, &rootkey);
+		dwresult = (hive == HKCU_LOCAL_IMP) ? ADVAPI32$RegOpenCurrentUser(KEY_READ | KEY_SET_VALUE, &rootkey) :  ADVAPI32$RegOpenKeyExA(hive, NULL, 0, KEY_READ | KEY_SET_VALUE, &rootkey);
 		if(ERROR_SUCCESS != dwresult)
 		{
-			internal_printf("RegOpenKeyExA failed (%lX)\n", dwresult); 
+			internal_printf("%s failed (%lX)\n", (hive == HKCU_LOCAL_IMP) ? "RegOpenCurrentUser" : "RegOpenKeyExA", dwresult);
 			goto delete_regkey_end;
 		}
 	}
@@ -103,7 +103,7 @@ VOID go(
 	t = BeaconDataInt(&parser);
 	#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 	#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-	hive = (HKEY)((DWORD) hive + (DWORD)t);
+	hive = ((HKEY)t == HKCU_LOCAL_IMP) ? HKCU_LOCAL_IMP :(HKEY)((DWORD) hive + (DWORD)t);
 	#pragma GCC diagnostic pop
 	path = BeaconDataExtract(&parser, NULL);
 	key = BeaconDataExtract(&parser, NULL);
@@ -123,7 +123,11 @@ VOID go(
 	{
 		return;
 	}
-
+	if(hostname != NULL && hive == HKCU_LOCAL_IMP)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Refusing to use HKCU_LOCAL_IMP with a remote host");
+        goto go_end;
+    }
 	internal_printf("Deleting registry key %s\\%p\\%s\\%s\n", ((hostname == NULL)?"\\\\.":hostname), hive, path, ((delkey == REG_DELETE_VALUE)?key:"*"));
 
 	dwErrorCode = delete_regkey(hostname, hive, path, key, delkey);

@@ -11,9 +11,9 @@ VOID go(
     IN PCHAR Buffer,
     IN ULONG Length)
 {
-    HRESULT hr = S_OK;
-    datap parser;
-    Arguments arguments;
+    datap parser = {0};
+    Arguments arguments = {0};
+    BOOL success = FALSE;
 
     if (!bofstart())
     {
@@ -25,22 +25,69 @@ VOID go(
     if (!ParseArguments(&parser, &arguments))
     {
         BeaconPrintf(CALLBACK_ERROR, "Invalid arguments");
-        return;
+        goto go_end;
     }
     if (arguments.computerName == NULL)
     {
         if (!CheckSystem())
         {
             BeaconPrintf(CALLBACK_ERROR, "You have to run it as SYSTEM.");
-            return;
+            goto go_end;
         }
     }
     if (arguments.taskOperation == TaskAddOperation)
-         AddScheduleTask(arguments.computerName, arguments.taskName, arguments.program, arguments.argument, arguments.userName, arguments.scheduleType, arguments.hour, arguments.minute, arguments.second, arguments.dayBitmap);
+        success = AddScheduleTask(arguments.computerName, arguments.taskName, arguments.program, arguments.argument, arguments.userName, arguments.scheduleType, arguments.hour, arguments.minute, arguments.second, arguments.dayBitmap);
     else if (arguments.taskOperation == TaskDeleteOperation)
-        DeleteScheduleTask(arguments.computerName, arguments.taskName);
+        success = DeleteScheduleTask(arguments.computerName, arguments.taskName);
 
-    internal_printf("\nRUN Ghost Tasks SUCCESS.\n");
+    if (success)
+        internal_printf("\nRUN Ghost Tasks SUCCESS.\n");
+
+go_end:
+    printoutput(TRUE);
+    bofstop();
+};
+
+// Keep the CNA-facing `go` entrypoint's variable-arity ABI intact and expose a
+// deterministic fixed-layout entrypoint for Sliver extension manifests.
+VOID sliver(
+    IN PCHAR Buffer,
+    IN ULONG Length)
+{
+    Arguments arguments = {0};
+    BOOL success = FALSE;
+
+    if (!bofstart())
+    {
+        return;
+    }
+
+    datap parser = {0};
+    if (!GhostTaskInitSliverParser(&parser, Buffer, Length))
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Invalid GhostTask argument envelope.");
+        goto sliver_end;
+    }
+
+    if (!ParseSliverArguments(&parser, &arguments))
+    {
+        goto sliver_end;
+    }
+    if (arguments.computerName == NULL && !CheckSystem())
+    {
+        BeaconPrintf(CALLBACK_ERROR, "You have to run it as SYSTEM.");
+        goto sliver_end;
+    }
+
+    if (arguments.taskOperation == TaskAddOperation)
+        success = AddScheduleTask(arguments.computerName, arguments.taskName, arguments.program, arguments.argument, arguments.userName, arguments.scheduleType, arguments.hour, arguments.minute, arguments.second, arguments.dayBitmap);
+    else
+        success = DeleteScheduleTask(arguments.computerName, arguments.taskName);
+
+    if (success)
+        internal_printf("\nRUN Ghost Tasks SUCCESS.\n");
+
+sliver_end:
     printoutput(TRUE);
     bofstop();
 };
@@ -48,6 +95,7 @@ VOID go(
 int main(int argc, char **argv)
 {
     Arguments arguments;
+    BOOL success = FALSE;
     if (argc == 2 && (strcasecmp(argv[1], "-h") == 0 || strcasecmp(argv[1], "--help") == 0))
     {
         printHelp();
@@ -64,9 +112,9 @@ int main(int argc, char **argv)
         }
     }
     if (arguments.taskOperation == TaskAddOperation)
-        AddScheduleTask(arguments.computerName, arguments.taskName, arguments.program, arguments.argument, arguments.userName, arguments.scheduleType, arguments.hour, arguments.minute, arguments.second, arguments.dayBitmap);
+        success = AddScheduleTask(arguments.computerName, arguments.taskName, arguments.program, arguments.argument, arguments.userName, arguments.scheduleType, arguments.hour, arguments.minute, arguments.second, arguments.dayBitmap);
     else if (arguments.taskOperation == TaskDeleteOperation)
-        DeleteScheduleTask(arguments.computerName, arguments.taskName);
-    return 0;
+        success = DeleteScheduleTask(arguments.computerName, arguments.taskName);
+    return success ? 0 : 1;
 }
 #endif

@@ -1,0 +1,37 @@
+{
+  "name": "lastpass",
+  "package_name": "remote-lastpass",
+  "version": "0.0.0",
+  "extension_author": "TrustedSec",
+  "original_author": "TrustedSec",
+  "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
+  "commands": [
+    {
+      "command_name": "remote-lastpass",
+      "help": "Search a LastPass process for passwords and account data",
+      "long_help": "Scans one LastPass process ID. The Sliver argument ABI is supported, but the upstream BOF emits binary LASTPASS callback records intended for the Cobalt Strike CNA/Python post-processor; Sliver does not currently provide equivalent parsed-output post-processing.",
+      "depends_on": "coff-loader",
+      "entrypoint": "sliver",
+      "files": [
+        {
+          "os": "windows",
+          "arch": "amd64",
+          "path": "lastpass.x64.o"
+        },
+        {
+          "os": "windows",
+          "arch": "386",
+          "path": "lastpass.x86.o"
+        }
+      ],
+      "arguments": [
+        {
+          "name": "pid",
+          "desc": "Process ID of the LastPass process to scan",
+          "type": "integer",
+          "optional": false
+        }
+      ]
+    }
+  ]
+}
