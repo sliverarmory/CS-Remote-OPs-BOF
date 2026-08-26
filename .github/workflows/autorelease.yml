@@ -262,7 +262,7 @@ jobs:
             archive="packages/$package_name.tar.gz"
             signature="packages/$package_name.minisig"
             manifest="$RUNNER_TEMP/$package_name.signed-manifest.json"
-            tar -xOzf "$archive" extension.json > "$manifest"
+            tar -xOzf "$archive" ./extension.json > "$manifest"
             trusted_comment=$(base64 -w 0 < "$manifest")
             printf '\n' | "$PACKAGE_SIGNER" -S -s "$key_file" -m "$archive" -t "$trusted_comment" -x "$signature"
             minisign -Vm "$archive" -x "$signature" -P "$PACKAGE_PUBLIC_KEY"
@@ -366,7 +366,7 @@ jobs:
             signature="packages/$package_name.minisig"
             manifest="$RUNNER_TEMP/$package_name.publish-manifest.json"
             minisign -Vm "$archive" -x "$signature" -P "$package_public_key"
-            tar -xOzf "$archive" extension.json > "$manifest"
+            tar -xOzf "$archive" ./extension.json > "$manifest"
             trusted_comment=$(base64 -w 0 < "$manifest")
             if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
               echo "ERROR: trusted manifest mismatch for $package_name" >&2
@@ -612,7 +612,7 @@ jobs:
             signature="$remote_dir/$package_name.minisig"
             manifest="$RUNNER_TEMP/$package_name.remote-manifest.json"
             minisign -Vm "$archive" -x "$signature" -P "$PACKAGE_PUBLIC_KEY"
-            tar -xOzf "$archive" extension.json > "$manifest"
+            tar -xOzf "$archive" ./extension.json > "$manifest"
             trusted_comment=$(base64 -w 0 < "$manifest")
             if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
               echo "ERROR: remote trusted manifest mismatch for $package_name" >&2

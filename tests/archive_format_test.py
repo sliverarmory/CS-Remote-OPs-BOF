@@ -3,6 +3,7 @@
 import io
 import json
 import pathlib
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -63,6 +64,19 @@ class ArchiveFormatTest(unittest.TestCase):
                     "v1.2.3",
                     "https://github.com/sliverarmory/test-extension",
                 )
+
+    def test_release_signer_extracts_prefixed_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = pathlib.Path(tmp) / "compatible.tar.gz"
+            self.write_archive(archive, "./")
+
+            result = subprocess.run(
+                ["tar", "-xOzf", str(archive), "./extension.json"],
+                check=True,
+                capture_output=True,
+            )
+            manifest = json.loads(result.stdout)
+            self.assertEqual(manifest["package_name"], "test-extension")
 
 
 if __name__ == "__main__":
