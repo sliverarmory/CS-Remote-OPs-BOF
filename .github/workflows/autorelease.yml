@@ -124,6 +124,7 @@ jobs:
             '${{ needs.build.outputs.release_metadata_artifact_id }}' \
             '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
             release-metadata
+          cmp armory-package-executors.txt release-metadata/armory-package-executors.txt
           cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
           EXPECTED_SOURCE_COMMIT="$tag_commit" scripts/verify_release_metadata.sh release-metadata >/dev/null
           require_default_branch_descendant "$tag_commit"
@@ -217,11 +218,13 @@ jobs:
             '${{ needs.build.outputs.release_metadata_artifact_id }}' \
             '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
             release-metadata
+          cmp armory-package-executors.txt release-metadata/armory-package-executors.txt
           cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
           package_public_key=$(EXPECTED_SOURCE_COMMIT="$TAG_COMMIT" scripts/verify_release_metadata.sh release-metadata)
           printf 'PACKAGE_PUBLIC_KEY=%s\n' "$package_public_key" >> "$GITHUB_ENV"
           python3 scripts/check_release_inventory.py \
             --inventory release-metadata/armory-package-inventory.txt \
+            --executors release-metadata/armory-package-executors.txt \
             --packages-dir packages \
             --repo-url "$PACKAGE_REPO_URL" \
             --tag "$GITHUB_REF_NAME" \
@@ -258,6 +261,7 @@ jobs:
           fi
 
           inventory=release-metadata/armory-package-inventory.txt
+          executors=release-metadata/armory-package-executors.txt
           while IFS= read -r package_name; do
             archive="packages/$package_name.tar.gz"
             signature="packages/$package_name.minisig"
@@ -278,6 +282,7 @@ jobs:
 
           python3 scripts/check_release_inventory.py \
             --inventory "$inventory" \
+            --executors "$executors" \
             --packages-dir packages \
             --repo-url "$PACKAGE_REPO_URL" \
             --tag "$GITHUB_REF_NAME" \
@@ -350,11 +355,13 @@ jobs:
             '${{ needs.build.outputs.release_metadata_artifact_id }}' \
             '${{ needs.build.outputs.release_metadata_artifact_digest }}' \
             release-metadata
+          cmp armory-package-executors.txt release-metadata/armory-package-executors.txt
           cmp armory-package-inventory.txt release-metadata/armory-package-inventory.txt
           package_public_key=$(EXPECTED_SOURCE_COMMIT="$TAG_COMMIT" scripts/verify_release_metadata.sh release-metadata)
           printf 'PACKAGE_PUBLIC_KEY=%s\n' "$package_public_key" >> "$GITHUB_ENV"
           python3 scripts/check_release_inventory.py \
             --inventory release-metadata/armory-package-inventory.txt \
+            --executors release-metadata/armory-package-executors.txt \
             --packages-dir packages \
             --repo-url "$PACKAGE_REPO_URL" \
             --tag "$GITHUB_REF_NAME" \

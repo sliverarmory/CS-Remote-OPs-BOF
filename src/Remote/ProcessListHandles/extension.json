@@ -11,6 +11,7 @@
             "help": "List the open handles of a process",
             "long_help": "Enumerates all handles held by the specified process using NtQuerySystemInformation and NtQueryObject. Reports handle type, value, and name for each handle.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

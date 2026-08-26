@@ -11,6 +11,7 @@
             "help": "Unlock and enable a local or remote user account",
             "long_help": "Enables and unlocks a user account by clearing the UF_ACCOUNTDISABLE and UF_LOCKOUT flags via NetUserSetInfo. Specify an empty server to target the local machine, or a domain controller for domain accounts.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

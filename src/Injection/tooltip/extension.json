@@ -11,6 +11,7 @@
             "help": "Inject shellcode via tooltips_class32 window vftable hijack",
             "long_help": "Injects shellcode by hijacking the tooltips_class32 virtual function table pointer using direct syscalls loaded from ntdll on disk. Targets processes with tooltip windows (e.g., explorer.exe). Triggers execution via TTM_GETBUBBLESIZE message.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

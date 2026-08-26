@@ -11,6 +11,7 @@
             "help": "Inject shellcode into explorer.exe via DDE window class",
             "long_help": "Injects shellcode into explorer.exe using the DDE (Dynamic Data Exchange) technique with direct syscalls loaded from ntdll on disk. Targets explorer.exe only — no PID required. WARNING: This technique causes the shellcode to execute FOUR times, so plan accordingly. Ensure your shellcode will not kill the process or thread.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

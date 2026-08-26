@@ -489,6 +489,19 @@ VOID sliver(
 	printoutput(TRUE);
 	bofstop();
 };
+
+/*
+ * Reflektor selects custom entrypoints by their exact COFF symbol name, while
+ * the legacy x86 COFFLoader prepends the platform underscore. Keep `_sliver`
+ * for that fallback and expose an exact `sliver` alias for built-in execution.
+ */
+#if defined(__i386__)
+VOID sliver_reflektor_entry(IN PCHAR Buffer, IN ULONG Length) __asm__("sliver");
+VOID sliver_reflektor_entry(IN PCHAR Buffer, IN ULONG Length)
+{
+	sliver(Buffer, Length);
+}
+#endif
 #else
 #define TEST_STRING_ARG "TEST_STRING_ARG"
 #define TEST_INT_ARG 12345

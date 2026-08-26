@@ -8,6 +8,7 @@ from typing import Any
 
 
 EXPECTED_PACKAGE_COUNT = 51
+SUPPORTED_EXECUTORS = {"coff-loader", "reflektor"}
 
 
 def canonical_repo_url(value: str) -> str:
@@ -26,6 +27,27 @@ def load_inventory(path: pathlib.Path) -> list[str]:
     if names != sorted(set(names)):
         raise ValueError("canonical inventory must be unique and sorted")
     return names
+
+
+def load_executor_inventory(path: pathlib.Path) -> dict[str, str]:
+    entries: list[tuple[str, str]] = []
+    for line in path.read_text().splitlines():
+        if not line:
+            continue
+        fields = line.split("\t")
+        if len(fields) != 2 or not fields[0] or fields[1] not in SUPPORTED_EXECUTORS:
+            raise ValueError(
+                "executor inventory entries must be <package><TAB><reflektor|coff-loader>"
+            )
+        entries.append((fields[0], fields[1]))
+    if len(entries) != EXPECTED_PACKAGE_COUNT:
+        raise ValueError(
+            f"executor inventory must contain {EXPECTED_PACKAGE_COUNT} entries, found {len(entries)}"
+        )
+    names = [name for name, _ in entries]
+    if names != sorted(set(names)):
+        raise ValueError("executor inventory package names must be unique and sorted")
+    return dict(entries)
 
 
 def safe_member_name(name: str) -> str:
@@ -63,6 +85,7 @@ def validate_archive(
     expected_name: str,
     tag: str | None,
     repo_url: str,
+    expected_executor: str | None = None,
 ) -> dict[str, Any]:
     with tarfile.open(archive, "r:gz") as package:
         files: dict[str, tarfile.TarInfo] = {}
@@ -110,6 +133,18 @@ def validate_archive(
             if not isinstance(command_name, str) or not command_name:
                 raise ValueError(f"{archive.name}: command_name is missing")
             command_names.append(command_name)
+            if expected_executor is not None:
+                executor = command.get("bof_executor")
+                if executor != expected_executor:
+                    raise ValueError(
+                        f"{archive.name}: bof_executor {executor!r} does not match "
+                        f"canonical policy {expected_executor!r}"
+                    )
+                if command.get("depends_on") != "coff-loader":
+                    raise ValueError(
+                        f"{archive.name}: command {command_name!r} must retain "
+                        "depends_on='coff-loader' fallback"
+                    )
             for file_entry in command.get("files", []):
                 if not isinstance(file_entry, dict):
                     raise ValueError(f"{archive.name}: files entry is not an object")
@@ -167,6 +202,7 @@ def verify_index(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--inventory", required=True, type=pathlib.Path)
+    parser.add_argument("--executors", required=True, type=pathlib.Path)
     parser.add_argument("--packages-dir", required=True, type=pathlib.Path)
     parser.add_argument("--repo-url", required=True)
     parser.add_argument("--tag")
@@ -176,6 +212,9 @@ def main() -> None:
     args = parser.parse_args()
 
     inventory = load_inventory(args.inventory)
+    executors = load_executor_inventory(args.executors)
+    if list(executors) != inventory:
+        raise ValueError("executor inventory identities do not match canonical package inventory")
     package_files = {path.name for path in args.packages_dir.iterdir() if path.is_file()}
     expected_archives = {f"{name}.tar.gz" for name in inventory}
     expected_signatures = {f"{name}.minisig" for name in inventory}
@@ -193,6 +232,7 @@ def main() -> None:
                 name,
                 args.tag,
                 args.repo_url,
+                executors[name],
             )
         )
 

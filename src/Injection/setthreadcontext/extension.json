@@ -11,6 +11,7 @@
             "help": "Inject shellcode into a process via thread context hijack",
             "long_help": "Injects shellcode into a target process by suspending a thread, modifying its context to point to shellcode, and resuming it. Uses GetThreadContext/SetThreadContext to redirect execution.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

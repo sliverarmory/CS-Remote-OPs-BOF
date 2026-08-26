@@ -11,6 +11,7 @@
             "help": "Add a user to a domain group",
             "long_help": "Adds the specified user to the specified group on a domain controller. Domain groups only. Use empty string for server to target the local machine, or empty string for domain to target a local account.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

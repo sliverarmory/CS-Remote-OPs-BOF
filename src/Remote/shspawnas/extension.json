@@ -11,6 +11,7 @@
             "help": "Spawn a process as another user and inject shellcode into it",
             "long_help": "Creates a new process using CreateProcessWithLogonW with the specified credentials, then injects and executes shellcode in the spawned process.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

@@ -27,6 +27,8 @@ class ArchiveFormatTest(unittest.TestCase):
                 "commands": [
                     {
                         "command_name": "test-extension",
+                        "bof_executor": "reflektor",
+                        "depends_on": "coff-loader",
                         "files": [{"os": "windows", "arch": "amd64", "path": "test.x64.o"}],
                     }
                 ],
@@ -77,6 +79,51 @@ class ArchiveFormatTest(unittest.TestCase):
             )
             manifest = json.loads(result.stdout)
             self.assertEqual(manifest["package_name"], "test-extension")
+
+    def test_executor_policy_and_fallback_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = pathlib.Path(tmp) / "compatible.tar.gz"
+            self.write_archive(archive, "./")
+
+            validate_archive(
+                archive,
+                "test-extension",
+                "v1.2.3",
+                "https://github.com/sliverarmory/test-extension",
+                "reflektor",
+            )
+            with self.assertRaisesRegex(ValueError, "canonical policy"):
+                validate_archive(
+                    archive,
+                    "test-extension",
+                    "v1.2.3",
+                    "https://github.com/sliverarmory/test-extension",
+                    "coff-loader",
+                )
+
+            with tarfile.open(archive, "r:gz") as package:
+                manifest_file = package.extractfile("./extension.json")
+                self.assertIsNotNone(manifest_file)
+                manifest = json.loads(manifest_file.read())
+            manifest["commands"][0].pop("depends_on")
+            members = {
+                "extension.json": json.dumps(manifest).encode(),
+                "LICENSE": b"test license\n",
+                "test.x64.o": b"object bytes\n",
+            }
+            with tarfile.open(archive, "w:gz") as package:
+                for name, data in members.items():
+                    info = tarfile.TarInfo("./" + name)
+                    info.size = len(data)
+                    package.addfile(info, io.BytesIO(data))
+            with self.assertRaisesRegex(ValueError, "must retain"):
+                validate_archive(
+                    archive,
+                    "test-extension",
+                    "v1.2.3",
+                    "https://github.com/sliverarmory/test-extension",
+                    "reflektor",
+                )
 
 
 if __name__ == "__main__":

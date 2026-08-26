@@ -11,6 +11,7 @@
             "help": "Inject shellcode into a process via CreateRemoteThread",
             "long_help": "Injects shellcode into a target process using VirtualAllocEx, WriteProcessMemory, and CreateRemoteThread. A straightforward injection technique that allocates RWX memory in the target process, writes shellcode, and creates a remote thread to execute it.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

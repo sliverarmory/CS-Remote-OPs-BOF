@@ -11,6 +11,7 @@
             "help": "Inject shellcode via clipboard window class (CLIPBRDWNDCLASS)",
             "long_help": "Injects shellcode using the clipboard technique with direct syscalls loaded from ntdll on disk. Targets processes that have a CLIPBRDWNDCLASS window (e.g., explorer.exe, vmtoolsd.exe, or the clipboard svchost.exe on Windows 10). Overwrites the IUnknown COM interface on the clipboard data object and triggers execution via WM_DESTROYCLIPBOARD.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

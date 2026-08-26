@@ -8,6 +8,7 @@
     "help": "Attempts to find, decrypt, and download Global Protect VPN profiles and HIP settings",
     "long_help": "There are no arguments to this command\n",
     "depends_on": "coff-loader",
+    "bof_executor": "reflektor",
     "entrypoint": "go",
     "files": [
       {

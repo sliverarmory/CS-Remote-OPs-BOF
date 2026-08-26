@@ -11,6 +11,7 @@
             "help": "Search a process's memory for Office JWT access tokens",
             "long_help": "Reads the memory of the specified process and searches for Microsoft Office JWT access tokens. Target a process that handles Office authentication (e.g., Microsoft Office apps).",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

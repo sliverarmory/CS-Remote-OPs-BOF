@@ -11,6 +11,7 @@
       "help": "Search a LastPass process for passwords and account data",
       "long_help": "Scans one LastPass process ID. The Sliver argument ABI is supported, but the upstream BOF emits binary LASTPASS callback records intended for the Cobalt Strike CNA/Python post-processor; Sliver does not currently provide equivalent parsed-output post-processing.",
       "depends_on": "coff-loader",
+      "bof_executor": "reflektor",
       "entrypoint": "sliver",
       "files": [
         {

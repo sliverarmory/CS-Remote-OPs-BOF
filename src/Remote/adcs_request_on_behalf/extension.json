@@ -11,6 +11,7 @@
             "help": "Request an enrollment certificate on behalf of another user",
             "long_help": "Uses an enrollment agent certificate (with XCN_OID_ENROLLMENT_AGENT in MSApplicationPolicies) to request a certificate as another user in the domain. On success, the resulting PFX is downloaded via the C2 framework's file download mechanism.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

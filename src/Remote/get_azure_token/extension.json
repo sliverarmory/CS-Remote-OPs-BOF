@@ -11,6 +11,7 @@
             "help": "Perform an OAuth code grant against Azure and print the returned tokens",
             "long_help": "Performs an OAuth authorization code flow with PKCE against Azure AD. Opens a browser on the target to authenticate, listens on localhost for the redirect callback, then exchanges the authorization code for tokens. The specified client_id must already have consent in the tenant and accept http://localhost as a redirect URI. If hint is omitted and multiple saved logins exist, authentication will fail.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

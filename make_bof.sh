@@ -37,7 +37,8 @@ jq -e '
           (.command_name | type == "string" and length > 0)
           and (.help | type == "string" and length > 0)
           and (.entrypoint | type == "string" and length > 0)
-          and (.depends_on | type == "string" and length > 0)
+          and (.depends_on == "coff-loader")
+          and (.bof_executor == "reflektor" or .bof_executor == "coff-loader")
           and (.files | type == "array" and length > 0)))
 ' "$MANIFEST_SOURCE" >/dev/null
 

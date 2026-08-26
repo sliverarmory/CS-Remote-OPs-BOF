@@ -9,6 +9,12 @@ create or modify repository settings.
 
 - `armory-package-inventory.txt` is the canonical, sorted inventory of 51
   packages. A release must contain exactly 51 archives and 51 signatures.
+- `armory-package-executors.txt` is the canonical per-package execution policy.
+  Every manifest must explicitly select either `reflektor` or `coff-loader`,
+  and every Reflektor-routed command must retain `depends_on: coff-loader` for
+  old-client and old-implant compatibility. Both x64 and x86 packaged objects
+  must pass the Reflektor load/relocation/import check before a package can be
+  routed to Reflektor.
 - The currently published, signed Armory index contains 47 sibling entries for
   this repository, all using one package public key. Every one of those 47 names
   must remain in the canonical inventory.

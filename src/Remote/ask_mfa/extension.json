@@ -11,6 +11,7 @@
             "help": "Display a fake Microsoft Authenticator MFA approval dialog",
             "long_help": "Displays a fake Microsoft Authenticator approval dialog showing the specified number. The dialog appears topmost and centered on the target's screen, auto-closes after 30 seconds or when dismissed by the user. Runs on a separate thread to avoid blocking the BOF.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

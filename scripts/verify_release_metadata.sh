@@ -13,6 +13,7 @@ trap 'rm -rf -- "$TMPDIR_METADATA"' EXIT
 required_files=(
     SHA256SUMS
     armory-index-public-key.txt
+    armory-package-executors.txt
     armory-package-inventory.txt
     armory-release-tag.txt
     armory.json
@@ -73,9 +74,26 @@ minisign -Vm "$METADATA_DIR/armory.json" \
     -P "$ARMORY_INDEX_PUBLIC_KEY" >&2
 
 inventory="$METADATA_DIR/armory-package-inventory.txt"
+executors="$METADATA_DIR/armory-package-executors.txt"
 LC_ALL=C sort -c "$inventory"
 if [[ $(wc -l < "$inventory" | tr -d ' ') -ne "$EXPECTED_CANONICAL_PACKAGES" ]]; then
     echo "ERROR: canonical inventory must contain $EXPECTED_CANONICAL_PACKAGES packages" >&2
+    exit 1
+fi
+LC_ALL=C sort -c -t $'\t' -k1,1 "$executors"
+if [[ $(wc -l < "$executors" | tr -d ' ') -ne "$EXPECTED_CANONICAL_PACKAGES" ]]; then
+    echo "ERROR: canonical executor inventory must contain $EXPECTED_CANONICAL_PACKAGES packages" >&2
+    exit 1
+fi
+if ! awk -F $'\t' '
+    NF != 2 || $1 !~ /^[A-Za-z0-9._-]+$/ || ($2 != "reflektor" && $2 != "coff-loader") { exit 1 }
+' "$executors"; then
+    echo "ERROR: invalid canonical executor inventory" >&2
+    exit 1
+fi
+cut -f1 "$executors" > "$TMPDIR_METADATA/executor-packages"
+if ! cmp -s "$inventory" "$TMPDIR_METADATA/executor-packages"; then
+    echo "ERROR: executor inventory identities do not match canonical package inventory" >&2
     exit 1
 fi
 

@@ -11,6 +11,7 @@
             "help": "Configure failure recovery actions for a service",
             "long_help": "Configures the actions taken when a service fails using ChangeServiceConfig2 with SERVICE_CONFIG_FAILURE_ACTIONS. Can set reboot messages, run commands, and define recovery actions (restart, reboot, run command, none).",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

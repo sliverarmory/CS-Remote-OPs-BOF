@@ -11,6 +11,7 @@
       "help": "Create or delete scheduled tasks through direct registry manipulation",
       "long_help": "Use operation=delete with computer-name and task-name. For operation=add, program, username, and schedule-type are required; second/daily/weekly schedules also require time, and weekly requires days. Use computer-name=localhost for the current system.",
       "depends_on": "coff-loader",
+      "bof_executor": "reflektor",
       "entrypoint": "sliver",
       "files": [
         {

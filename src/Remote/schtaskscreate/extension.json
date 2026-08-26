@@ -11,6 +11,7 @@
             "help": "Create a scheduled task from XML on a local or remote machine",
             "long_help": "Creates a scheduled task using ITaskFolder::RegisterTask with the provided XML definition. Supports specifying credentials, run mode (user, system, or principal from XML), and force overwrite of existing tasks.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

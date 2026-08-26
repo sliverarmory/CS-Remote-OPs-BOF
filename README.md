@@ -12,6 +12,20 @@ We have decided to include the injection BOFs that we use when doing EDR detecti
 
 You are welcome to use these, but issues opened related to these will be closed without review.
 
+## Sliver BOF execution
+
+The Armory manifests select Sliver's built-in Reflektor BOF executor for BOFs
+that load on both Windows architectures. They retain `depends_on: coff-loader`
+so older Sliver clients and implants continue to use the legacy COFFLoader
+extension. Sliver builds that predate `bof_executor` ignore the additive field
+and therefore keep their existing behavior.
+
+BOFs that require Cobalt Strike host callbacks which Sliver does not currently
+provide remain explicitly routed through COFFLoader. The canonical routing
+policy is recorded in `armory-package-executors.txt` and is validated against
+every release archive. Do not switch one of those commands to Reflektor until
+the actual packaged x64 and x86 objects load without unresolved host imports.
+
 ## Available Remote Operations commands
 
 |Command|Usage|Notes|

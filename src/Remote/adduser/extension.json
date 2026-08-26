@@ -11,6 +11,7 @@
             "help": "Add a new user to a local or remote machine",
             "long_help": "Creates a new user account on the specified machine using NetUserAdd. If no server is specified, the user is created on the local machine.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

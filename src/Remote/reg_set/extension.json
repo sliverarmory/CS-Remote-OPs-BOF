@@ -11,6 +11,7 @@
             "help": "Set a registry value on a local or remote machine",
             "long_help": "Creates or modifies a registry value using RegSetValueExA. Supports REG_SZ, REG_EXPAND_SZ, REG_BINARY, REG_DWORD, REG_MULTI_SZ, and REG_QWORD types.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

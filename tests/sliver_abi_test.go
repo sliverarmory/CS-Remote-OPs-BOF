@@ -64,7 +64,7 @@ func TestCSRemoteOpsPackedABI(t *testing.T) {
 		if command.Entrypoint != "sliver" {
 			t.Fatalf("entrypoint=%q", command.Entrypoint)
 		}
-		if command.BOFExecutor != "" || command.DependsOn != "coff-loader" {
+		if command.BOFExecutor != "reflektor" || command.DependsOn != "coff-loader" {
 			t.Fatalf("unexpected execution routing bof_executor=%q depends_on=%q", command.BOFExecutor, command.DependsOn)
 		}
 		if len(command.Arguments) != 1 || command.Arguments[0].Name != "pid" || command.Arguments[0].Type != "integer" {
@@ -88,7 +88,7 @@ func TestCSRemoteOpsPackedABI(t *testing.T) {
 	if command.Entrypoint != "sliver" {
 		t.Fatalf("entrypoint=%q", command.Entrypoint)
 	}
-	if command.BOFExecutor != "" || command.DependsOn != "coff-loader" {
+	if command.BOFExecutor != "reflektor" || command.DependsOn != "coff-loader" {
 		t.Fatalf("unexpected execution routing bof_executor=%q depends_on=%q", command.BOFExecutor, command.DependsOn)
 	}
 	wantArgumentNames := []string{

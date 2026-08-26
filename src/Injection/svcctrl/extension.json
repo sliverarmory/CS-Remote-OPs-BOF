@@ -11,6 +11,7 @@
             "help": "Inject shellcode via service dispatch table overwrite",
             "long_help": "Injects shellcode by overwriting a service's internal dispatch entry (IDE) table in the target process. The target must be a process hosting services (e.g., svchost.exe, spoolsv.exe).",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

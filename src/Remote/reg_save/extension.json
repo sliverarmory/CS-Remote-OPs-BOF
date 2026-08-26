@@ -11,6 +11,7 @@
             "help": "Save a registry hive to a file on disk",
             "long_help": "Backs up a registry key to a file on the target using RegSaveKeyExA. Requires SeBackupPrivilege to be enabled.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

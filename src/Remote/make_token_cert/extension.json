@@ -11,6 +11,7 @@
             "help": "Create an impersonation token from a certificate PFX file",
             "long_help": "Reads a PFX certificate file, imports it into the current user's certificate store, creates an impersonation token based on the certificate's Alt Name via PKINIT, then removes the certificate from the store. Useful for leveraging ADCS-obtained certificates for authentication.",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {

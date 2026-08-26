@@ -11,6 +11,7 @@
             "help": "Dump a process to a file on disk",
             "long_help": "Creates a minidump of the specified process using MiniDumpWriteDump and writes it to the specified path on the target.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

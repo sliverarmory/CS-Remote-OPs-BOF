@@ -11,6 +11,7 @@
             "help": "Shutdown or reboot a local or remote machine",
             "long_help": "Initiates a system shutdown or reboot using InitiateSystemShutdownExA. Can display a message and set a countdown timeout before the action occurs.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

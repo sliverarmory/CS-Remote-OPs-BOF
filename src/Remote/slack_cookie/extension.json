@@ -7,6 +7,7 @@
     "repo_url": "https://github.com/sliverarmory/CS-Remote-OPs-BOF",
     "help": "Collect the Slack authentication cookie from a Slack process",
     "depends_on": "coff-loader",
+    "bof_executor": "reflektor",
     "entrypoint": "go",
     "files": [
       {

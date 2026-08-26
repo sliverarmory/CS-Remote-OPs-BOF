@@ -3,8 +3,6 @@
 #include "bofdefs.h"
 #include "base.c"
 
-void ___chkstk_ms() { return; }
-
 int myAtoi(char* str)
 {
     // take ASCII character of corresponding digit and subtract the code from '0' to get numerical
@@ -22,6 +20,7 @@ DWORD config_failure(const char* Hostname, const char* cpServiceName, DWORD dwRe
 	SC_HANDLE scManager = NULL;
 	SC_HANDLE scService = NULL;
 	HANDLE hToken = NULL;
+	SC_ACTION *actions = NULL;
 	LUID luid;
 	SERVICE_FAILURE_ACTIONSA serviceFailureActions;
 	serviceFailureActions.dwResetPeriod = dwResetPeriod;
@@ -31,45 +30,83 @@ DWORD config_failure(const char* Hostname, const char* cpServiceName, DWORD dwRe
 
     char buffer[100];
     int bufferIndex = 0;
-	int actionsIndex = 0;
-	SC_ACTION actions[cActions];
+	DWORD actionsIndex = 0;
 	int counter = 0;
 
-    // Iterate through lpsaActions
-    for (int i = 0; lpsaActions[i] != '\0'; i++) {
-        if (lpsaActions[i] == '/') {
-            // Found a delimiter, null-terminate the buffer and assign the substring
-            buffer[bufferIndex] = '\0';
+	if (cActions == 0)
+	{
+		if (lpsaActions != NULL && lpsaActions[0] != '\0')
+		{
+			dwResult = ERROR_INVALID_PARAMETER;
+			goto config_failure_end;
+		}
+	}
+	else
+	{
+		if (lpsaActions == NULL || (SIZE_T)cActions > ((SIZE_T)-1) / sizeof(*actions))
+		{
+			dwResult = ERROR_INVALID_PARAMETER;
+			goto config_failure_end;
+		}
+		actions = (SC_ACTION *)intAlloc((SIZE_T)cActions * sizeof(*actions));
+		if (actions == NULL)
+		{
+			dwResult = ERROR_NOT_ENOUGH_MEMORY;
+			goto config_failure_end;
+		}
 
-			if (counter < 1) { 
-				actions[actionsIndex].Type = myAtoi(buffer);
-				counter++;
+		// Parse alternating action/delay values separated by '/'.
+		for (SIZE_T i = 0; lpsaActions[i] != '\0'; i++)
+		{
+			if (lpsaActions[i] == '/')
+			{
+				if (bufferIndex == 0 || actionsIndex >= cActions)
+				{
+					dwResult = ERROR_INVALID_PARAMETER;
+					goto config_failure_end;
+				}
+				buffer[bufferIndex] = '\0';
+				if (counter == 0)
+				{
+					actions[actionsIndex].Type = myAtoi(buffer);
+					counter = 1;
+				}
+				else
+				{
+					actions[actionsIndex].Delay = myAtoi(buffer);
+					counter = 0;
+					actionsIndex++;
+				}
+				bufferIndex = 0;
+				continue;
 			}
-			else { 
-				actions[actionsIndex].Delay = myAtoi(buffer);
-				counter--;
-				actionsIndex++;
+			if ((SIZE_T)bufferIndex >= sizeof(buffer) - 1)
+			{
+				dwResult = ERROR_INVALID_PARAMETER;
+				goto config_failure_end;
 			}
+			buffer[bufferIndex++] = lpsaActions[i];
+		}
 
-            // Reset the buffer for the next substring
-            bufferIndex = 0;
-        } else {
-            // Copy the character into the buffer
-            buffer[bufferIndex] = lpsaActions[i];
-            bufferIndex++;
+		if (bufferIndex > 0)
+		{
+			if (counter != 1 || actionsIndex >= cActions)
+			{
+				dwResult = ERROR_INVALID_PARAMETER;
+				goto config_failure_end;
+			}
+			buffer[bufferIndex] = '\0';
+			actions[actionsIndex++].Delay = myAtoi(buffer);
+			counter = 0;
+		}
+		if (counter != 0 || actionsIndex != cActions)
+		{
+			dwResult = ERROR_INVALID_PARAMETER;
+			goto config_failure_end;
+		}
+	}
 
-            // Check for buffer overflow
-            if (bufferIndex >= sizeof(buffer)) { break; }
-        }
-    }
-
-    // Assign the last substring
-    if (bufferIndex > 0) {
-        buffer[bufferIndex] = '\0';
-        actions[actionsIndex].Delay = myAtoi(buffer);
-    }
-
-	serviceFailureActions.lpsaActions= actions;
+	serviceFailureActions.lpsaActions = actions;
 	
 	// Open the service control manager
 	scManager = ADVAPI32$OpenSCManagerA(Hostname, SERVICES_ACTIVE_DATABASEA, SC_MANAGER_CONNECT);
@@ -129,6 +166,11 @@ config_failure_end:
 	{
 		KERNEL32$CloseHandle(hToken);
 		hToken = NULL;
+	}
+	if (actions)
+	{
+		intFree(actions);
+		actions = NULL;
 	}
 	return dwResult;
 }

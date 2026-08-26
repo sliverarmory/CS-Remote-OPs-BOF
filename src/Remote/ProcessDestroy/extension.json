@@ -11,6 +11,7 @@
             "help": "Crash a process by closing its handles via NtDuplicateObject",
             "long_help": "Closes handles in the target process using NtDuplicateObject with DUPLICATE_CLOSE_SOURCE. Can close a specific handle by ID, or all handles to crash the process. Do not target system processes.",
             "depends_on": "coff-loader",
+            "bof_executor": "reflektor",
             "entrypoint": "go",
             "files": [
                 {

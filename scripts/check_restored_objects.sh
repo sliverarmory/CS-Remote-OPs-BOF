@@ -37,6 +37,7 @@ for package_name in lastpass ghost_task; do
     require_symbol "$OBJDUMP_X64" "$x64_object" sliver
     require_symbol "$OBJDUMP_X86" "$x86_object" _go
     require_symbol "$OBJDUMP_X86" "$x86_object" _sliver
+    require_symbol "$OBJDUMP_X86" "$x86_object" sliver
     x64_symbols=$("$OBJDUMP_X64" -t "$x64_object")
     x86_symbols=$("$OBJDUMP_X86" -t "$x86_object")
     if grep 'go_sliver' <<<"$x64_symbols" >/dev/null ||
@@ -45,6 +46,13 @@ for package_name in lastpass ghost_task; do
         exit 1
     fi
 done
+
+sc_failure_x86="$REPOROOT/Remote/sc_failure/sc_failure.x86.o"
+if "$OBJDUMP_X86" -t "$sc_failure_x86" | grep -F 'chkstk' >/dev/null ||
+   "$OBJDUMP_X86" -r "$sc_failure_x86" | grep -F 'chkstk' >/dev/null; then
+    echo "ERROR: sc_failure x86 still contains an unsupported chkstk stack probe" >&2
+    exit 1
+fi
 
 require_relocation "$OBJDUMP_X64" "$REPOROOT/Remote/ghost_task/ghost_task.x64.o" __imp_FreeLibrary
 require_relocation "$OBJDUMP_X86" "$REPOROOT/Remote/ghost_task/ghost_task.x86.o" __imp__FreeLibrary@4
@@ -76,4 +84,4 @@ if [[ $(printf '%s\n' "$x64_sliver" | grep -Ec '\$0x22') -lt 2 ]] ||
     exit 1
 fi
 
-echo "[+] Restored LastPass/GhostTask object safety checks passed"
+echo "[+] Restored BOF object safety checks passed"

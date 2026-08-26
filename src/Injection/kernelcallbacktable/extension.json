@@ -11,6 +11,7 @@
             "help": "Inject shellcode via PEB KernelCallbackTable hijack",
             "long_help": "Injects shellcode by hijacking the KernelCallbackTable pointer in the target process's PEB using direct syscalls loaded from ntdll on disk. Triggers execution via WM_COPYDATA message. Can only target processes that handle window messages (GUI processes).",
             "depends_on": "coff-loader",
+            "bof_executor": "coff-loader",
             "entrypoint": "go",
             "files": [
                 {
