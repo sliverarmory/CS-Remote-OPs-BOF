@@ -186,6 +186,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes minisign jq
 
+      - name: Install key-compatible package signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer_dir="$RUNNER_TEMP/package-signer"
+          signer_archive="$RUNNER_TEMP/minisign-linux-amd64.tar.gz"
+          mkdir -p "$signer_dir"
+          curl --fail --location --silent --show-error \
+            --output "$signer_archive" \
+            https://github.com/aead/minisign/releases/download/v0.2.0/minisign-linux-amd64.tar.gz
+          printf '%s  %s\n' \
+            c21b083e5a0b340a3580179abecdf7bd3359607ced37552aa6c1f41ed74f516d \
+            "$signer_archive" | sha256sum --check
+          tar -xzf "$signer_archive" -C "$signer_dir" minisign
+          chmod 755 "$signer_dir/minisign"
+          printf 'PACKAGE_SIGNER=%s\n' "$signer_dir/minisign" >> "$GITHUB_ENV"
+
       - name: Reverify metadata and unsigned package set
         env:
           GH_TOKEN: ${{ github.token }}
@@ -229,18 +246,11 @@ jobs:
             rmdir "$key_dir" 2>/dev/null || true
           }
           trap cleanup_key EXIT INT TERM
-          # Preserve compatibility with the existing repository secret, which
-          # may contain either raw newlines or the historical literal \n form.
-          if [[ "$MINISIGN_PRIVATE_KEY" == *$'\n'* ]]; then
-            printf '%s' "$MINISIGN_PRIVATE_KEY" > "$key_file"
-          else
-            printf '%b' "$MINISIGN_PRIVATE_KEY" > "$key_file"
-          fi
-          if [[ -n $(tail -c 1 "$key_file") ]]; then
-            printf '\n' >> "$key_file"
-          fi
+          # Match the historical successful release path: the repository
+          # secret may contain raw newlines or literal \n escapes.
+          printf '%b\n' "$MINISIGN_PRIVATE_KEY" > "$key_file"
           chmod 600 "$key_file"
-          printf '\n' | minisign -R -s "$key_file" -p "$public_key_file"
+          printf '\n' | "$PACKAGE_SIGNER" -R -s "$key_file" -p "$public_key_file"
           recovered_public_key=$(sed -n '2p' "$public_key_file")
           if [[ "$recovered_public_key" != "$PACKAGE_PUBLIC_KEY" ]]; then
             echo "ERROR: repository signing key does not match the signed Armory index" >&2
@@ -254,7 +264,7 @@ jobs:
             manifest="$RUNNER_TEMP/$package_name.signed-manifest.json"
             tar -xOzf "$archive" extension.json > "$manifest"
             trusted_comment=$(base64 -w 0 < "$manifest")
-            printf '\n' | minisign -S -s "$key_file" -m "$archive" -t "$trusted_comment" -x "$signature"
+            printf '\n' | "$PACKAGE_SIGNER" -S -s "$key_file" -m "$archive" -t "$trusted_comment" -x "$signature"
             minisign -Vm "$archive" -x "$signature" -P "$PACKAGE_PUBLIC_KEY"
             if [[ $(sed -n '3s/^trusted comment: //p' "$signature") != "$trusted_comment" ]]; then
               echo "ERROR: trusted manifest mismatch for $package_name" >&2

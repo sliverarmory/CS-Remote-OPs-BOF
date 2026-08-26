@@ -32,9 +32,11 @@ results, so a no-crash invocation is not proof of full operator functionality.
 1. The repository secret `MINISIGN_PRIVATE_KEY` must contain the existing package
    private key pinned by the signed Armory index. The workflow accepts either raw
    multiline contents or the historical form containing literal `\n` escapes,
-   and uses the key's existing empty passphrase. It reconstructs the public key
-   before signing and fails unless it exactly matches the key in the verified
-   signed index. Do not generate or substitute a new key.
+   and uses the key's existing empty passphrase. Signing uses the checksum-pinned
+   `aead/minisign` v0.2.0 binary that produced earlier package releases; current
+   Minisign independently verifies every result. The workflow reconstructs the
+   public key before signing and fails unless it exactly matches the key in the
+   verified signed index. Do not generate or substitute a new key.
 2. The release tag must be a GitHub-verified signed annotated tag whose embedded
    tag name exactly matches the pushed ref and whose object points directly to a
    commit. The peeled commit must be an ancestor of the repository's current
@@ -93,9 +95,9 @@ that new tag:
 ```console
 git switch main
 git pull --ff-only origin main
-git tag -s v0.1.4 -m 'CS-Remote-OPs-BOF v0.1.4'
-git verify-tag v0.1.4
-git push origin refs/tags/v0.1.4
+git tag -s v0.1.5 -m 'CS-Remote-OPs-BOF v0.1.5'
+git verify-tag v0.1.5
+git push origin refs/tags/v0.1.5
 ```
 
 Do not move, reuse, or force-push an existing tag.
